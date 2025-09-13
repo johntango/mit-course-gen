@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ArrowRight, BookOpen } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 const LessonView = () => {
   const { courseId, lessonId } = useParams();
@@ -111,12 +112,26 @@ const LessonView = () => {
                 Module: {lesson.modules?.title}
               </p>
             </CardHeader>
-            <CardContent className="prose prose-lg max-w-none">
-              <div 
-                className="text-foreground leading-relaxed"
-                style={{ whiteSpace: 'pre-wrap' }}
-              >
-                {lesson.content || 'No content available for this lesson.'}
+            <CardContent>
+              <div className="markdown-content text-foreground leading-relaxed space-y-4">
+                <ReactMarkdown
+                  components={{
+                    h1: ({children}) => <h1 className="text-2xl font-bold text-foreground mb-4 mt-6 first:mt-0">{children}</h1>,
+                    h2: ({children}) => <h2 className="text-xl font-semibold text-foreground mb-3 mt-5 first:mt-0">{children}</h2>,
+                    h3: ({children}) => <h3 className="text-lg font-medium text-foreground mb-2 mt-4 first:mt-0">{children}</h3>,
+                    p: ({children}) => <p className="text-foreground mb-3 leading-relaxed">{children}</p>,
+                    ul: ({children}) => <ul className="list-disc list-inside mb-4 space-y-1 text-foreground">{children}</ul>,
+                    ol: ({children}) => <ol className="list-decimal list-inside mb-4 space-y-1 text-foreground">{children}</ol>,
+                    li: ({children}) => <li className="text-foreground">{children}</li>,
+                    blockquote: ({children}) => <blockquote className="border-l-4 border-primary pl-4 italic text-muted-foreground mb-4">{children}</blockquote>,
+                    code: ({children}) => <code className="bg-muted px-1.5 py-0.5 rounded text-sm font-mono text-foreground">{children}</code>,
+                    pre: ({children}) => <pre className="bg-muted p-4 rounded-lg overflow-x-auto mb-4">{children}</pre>,
+                    strong: ({children}) => <strong className="font-semibold text-foreground">{children}</strong>,
+                    em: ({children}) => <em className="italic text-foreground">{children}</em>,
+                  }}
+                >
+                  {lesson.content || 'No content available for this lesson.'}
+                </ReactMarkdown>
               </div>
             </CardContent>
           </Card>
