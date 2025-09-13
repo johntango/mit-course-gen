@@ -126,23 +126,23 @@ const CourseDetail = () => {
                     </CardTitle>
                     <CardDescription>{module.description}</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-2">
-                    {module.lessons?.map((lesson, lessonIndex) => (
-                      <Button
-                        key={lesson.id}
-                        variant="ghost"
-                        className="w-full justify-start h-auto p-4"
-                        onClick={() => navigate(`/course/${courseId}/lesson/${lesson.id}`)}
-                      >
-                        <Play className="w-4 h-4 mr-3 text-primary" />
-                        <div className="text-left">
-                          <div className="font-medium">{lesson.title}</div>
-                          <div className="text-sm text-muted-foreground">
-                            Lesson {lessonIndex + 1}
-                          </div>
-                        </div>
-                      </Button>
-                    ))}
+                   <CardContent className="space-y-1">
+                     {module.lessons?.map((lesson, lessonIndex) => (
+                       <Button
+                         key={lesson.id}
+                         variant="ghost"
+                         className="w-full justify-start h-auto p-3"
+                         onClick={() => navigate(`/course/${courseId}/lesson/${lesson.id}`)}
+                       >
+                         <Play className="w-4 h-4 mr-3 text-primary" />
+                         <div className="text-left flex items-center gap-2">
+                           <span className="text-sm text-muted-foreground">
+                             Lesson {lessonIndex + 1}:
+                           </span>
+                           <span className="font-medium">{lesson.title}</span>
+                         </div>
+                       </Button>
+                     ))}
                   </CardContent>
                 </Card>
               ))}
