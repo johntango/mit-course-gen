@@ -113,7 +113,7 @@ const CourseDetail = () => {
             </Card>
 
             {/* Modules and Lessons */}
-            <div className="space-y-4">
+            <div className="space-y-2">
               <h2 className="text-2xl font-bold text-foreground">Course Content</h2>
               {modules?.map((module, moduleIndex) => (
                 <Card key={module.id} className="bg-card border-border/50">
