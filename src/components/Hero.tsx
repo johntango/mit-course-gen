@@ -36,7 +36,15 @@ export const Hero = () => {
           >
             Start Creating
           </Button>
-          <Button variant="secondary" size="lg" className="text-lg px-8 py-6">
+          <Button 
+            variant="secondary" 
+            size="lg" 
+            className="text-lg px-8 py-6"
+            onClick={() => {
+              const catalogSection = document.getElementById('course-catalog');
+              catalogSection?.scrollIntoView({ behavior: 'smooth' });
+            }}
+          >
             View Examples
           </Button>
         </div>
