@@ -14,83 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
-      agent_events: {
-        Row: {
-          created_at: string | null
-          id: number
-          level: string
-          message: string
-          meta: Json | null
-          phase: string
-          run_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: number
-          level?: string
-          message: string
-          meta?: Json | null
-          phase: string
-          run_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: number
-          level?: string
-          message?: string
-          meta?: Json | null
-          phase?: string
-          run_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "agent_events_run_id_fkey"
-            columns: ["run_id"]
-            isOneToOne: false
-            referencedRelation: "agent_runs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       agent_runs: {
         Row: {
+          agent_type: string
+          completed_at: string | null
           course_id: string | null
-          created_at: string | null
-          error: string | null
+          created_at: string
+          error_message: string | null
           id: string
-          kind: string
-          payload: Json | null
-          progress: number
+          input_data: Json | null
+          messages: Json | null
+          output_data: Json | null
+          started_at: string | null
           status: string
-          summary: string | null
-          updated_at: string | null
-          user_id: string | null
         }
         Insert: {
+          agent_type: string
+          completed_at?: string | null
           course_id?: string | null
-          created_at?: string | null
-          error?: string | null
+          created_at?: string
+          error_message?: string | null
           id?: string
-          kind: string
-          payload?: Json | null
-          progress?: number
+          input_data?: Json | null
+          messages?: Json | null
+          output_data?: Json | null
+          started_at?: string | null
           status?: string
-          summary?: string | null
-          updated_at?: string | null
-          user_id?: string | null
         }
         Update: {
+          agent_type?: string
+          completed_at?: string | null
           course_id?: string | null
-          created_at?: string | null
-          error?: string | null
+          created_at?: string
+          error_message?: string | null
           id?: string
-          kind?: string
-          payload?: Json | null
-          progress?: number
+          input_data?: Json | null
+          messages?: Json | null
+          output_data?: Json | null
+          started_at?: string | null
           status?: string
-          summary?: string | null
-          updated_at?: string | null
-          user_id?: string | null
         }
         Relationships: [
           {
@@ -102,72 +64,28 @@ export type Database = {
           },
         ]
       }
-      artifacts: {
+      course_specs: {
         Row: {
-          artifact_type: string
-          content: Json | null
-          created_at: string | null
-          entity_id: string | null
-          entity_type: string
+          course_id: string
+          created_at: string
           id: string
-          job_id: string
+          spec_data: Json
         }
         Insert: {
-          artifact_type: string
-          content?: Json | null
-          created_at?: string | null
-          entity_id?: string | null
-          entity_type: string
+          course_id: string
+          created_at?: string
           id?: string
-          job_id: string
+          spec_data: Json
         }
         Update: {
-          artifact_type?: string
-          content?: Json | null
-          created_at?: string | null
-          entity_id?: string | null
-          entity_type?: string
+          course_id?: string
+          created_at?: string
           id?: string
-          job_id?: string
+          spec_data?: Json
         }
         Relationships: [
           {
-            foreignKeyName: "artifacts_job_id_fkey"
-            columns: ["job_id"]
-            isOneToOne: false
-            referencedRelation: "generation_jobs"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      assets: {
-        Row: {
-          content_type: string | null
-          course_id: string | null
-          created_at: string | null
-          id: string
-          is_public: boolean
-          storage_path: string
-        }
-        Insert: {
-          content_type?: string | null
-          course_id?: string | null
-          created_at?: string | null
-          id?: string
-          is_public?: boolean
-          storage_path: string
-        }
-        Update: {
-          content_type?: string | null
-          course_id?: string | null
-          created_at?: string | null
-          id?: string
-          is_public?: boolean
-          storage_path?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "assets_course_id_fkey"
+            foreignKeyName: "course_specs_course_id_fkey"
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
@@ -177,97 +95,64 @@ export type Database = {
       }
       courses: {
         Row: {
-          created_at: string | null
+          created_at: string
+          created_by: string
           description: string | null
           id: string
-          published: boolean
-          slug: string
+          length_hours: number
+          status: string
+          target_knowledge_level: string
           title: string
-          visibility: string
+          updated_at: string
         }
         Insert: {
-          created_at?: string | null
+          created_at?: string
+          created_by: string
           description?: string | null
           id?: string
-          published?: boolean
-          slug: string
-          title: string
-          visibility?: string
-        }
-        Update: {
-          created_at?: string | null
-          description?: string | null
-          id?: string
-          published?: boolean
-          slug?: string
-          title?: string
-          visibility?: string
-        }
-        Relationships: []
-      }
-      generation_jobs: {
-        Row: {
-          created_at: string | null
-          id: string
-          prompt: Json
-          status: string
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          id?: string
-          prompt: Json
-          status: string
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          id?: string
-          prompt?: Json
+          length_hours: number
           status?: string
-          updated_at?: string | null
+          target_knowledge_level: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          length_hours?: number
+          status?: string
+          target_knowledge_level?: string
+          title?: string
+          updated_at?: string
         }
         Relationships: []
       }
       lessons: {
         Row: {
-          content_html: string | null
-          content_md: string | null
-          created_at: string | null
+          content: string | null
+          created_at: string
           id: string
           module_id: string
           position: number
-          published: boolean
-          slug: string
-          summary: string | null
           title: string
-          updated_at: string | null
         }
         Insert: {
-          content_html?: string | null
-          content_md?: string | null
-          created_at?: string | null
+          content?: string | null
+          created_at?: string
           id?: string
           module_id: string
           position?: number
-          published?: boolean
-          slug: string
-          summary?: string | null
           title: string
-          updated_at?: string | null
         }
         Update: {
-          content_html?: string | null
-          content_md?: string | null
-          created_at?: string | null
+          content?: string | null
+          created_at?: string
           id?: string
           module_id?: string
           position?: number
-          published?: boolean
-          slug?: string
-          summary?: string | null
           title?: string
-          updated_at?: string | null
         }
         Relationships: [
           {
@@ -282,26 +167,26 @@ export type Database = {
       modules: {
         Row: {
           course_id: string
-          created_at: string | null
+          created_at: string
+          description: string | null
           id: string
           position: number
-          slug: string
           title: string
         }
         Insert: {
           course_id: string
-          created_at?: string | null
+          created_at?: string
+          description?: string | null
           id?: string
           position?: number
-          slug: string
           title: string
         }
         Update: {
           course_id?: string
-          created_at?: string | null
+          created_at?: string
+          description?: string | null
           id?: string
           position?: number
-          slug?: string
           title?: string
         }
         Relationships: [
@@ -341,92 +226,6 @@ export type Database = {
           org?: string | null
           updated_at?: string
           user_id?: string
-        }
-        Relationships: []
-      }
-      questions: {
-        Row: {
-          answer: Json | null
-          difficulty: number | null
-          est_time_minutes: number | null
-          id: string
-          lesson_id: string | null
-          options: Json | null
-          solution: string | null
-          stem: string | null
-          type: string | null
-        }
-        Insert: {
-          answer?: Json | null
-          difficulty?: number | null
-          est_time_minutes?: number | null
-          id?: string
-          lesson_id?: string | null
-          options?: Json | null
-          solution?: string | null
-          stem?: string | null
-          type?: string | null
-        }
-        Update: {
-          answer?: Json | null
-          difficulty?: number | null
-          est_time_minutes?: number | null
-          id?: string
-          lesson_id?: string | null
-          options?: Json | null
-          solution?: string | null
-          stem?: string | null
-          type?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "questions_lesson_id_fkey"
-            columns: ["lesson_id"]
-            isOneToOne: false
-            referencedRelation: "lessons"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      triage_requests: {
-        Row: {
-          course_slug: string
-          created_at: string | null
-          diff: Json | null
-          error: string | null
-          id: string
-          lesson_slug: string | null
-          module_slug: string | null
-          prompt: string
-          scope: string
-          status: string
-          updated_at: string | null
-        }
-        Insert: {
-          course_slug: string
-          created_at?: string | null
-          diff?: Json | null
-          error?: string | null
-          id?: string
-          lesson_slug?: string | null
-          module_slug?: string | null
-          prompt: string
-          scope: string
-          status?: string
-          updated_at?: string | null
-        }
-        Update: {
-          course_slug?: string
-          created_at?: string | null
-          diff?: Json | null
-          error?: string | null
-          id?: string
-          lesson_slug?: string | null
-          module_slug?: string | null
-          prompt?: string
-          scope?: string
-          status?: string
-          updated_at?: string | null
         }
         Relationships: []
       }
