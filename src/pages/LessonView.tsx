@@ -6,6 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ArrowRight, BookOpen } from "lucide-react";
 import ReactMarkdown from "react-markdown";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css";
 
 const LessonView = () => {
   const { courseId, lessonId } = useParams();
@@ -115,6 +118,8 @@ const LessonView = () => {
             <CardContent>
               <div className="markdown-content text-foreground leading-relaxed space-y-4">
                 <ReactMarkdown
+                  remarkPlugins={[remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
                   components={{
                     h1: ({children}) => <h1 className="text-2xl font-bold text-foreground mb-4 mt-6 first:mt-0">{children}</h1>,
                     h2: ({children}) => <h2 className="text-xl font-semibold text-foreground mb-3 mt-5 first:mt-0">{children}</h2>,
