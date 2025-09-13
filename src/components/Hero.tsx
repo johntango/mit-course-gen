@@ -1,7 +1,9 @@
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 import heroImage from "@/assets/hero-education.jpg";
 
 export const Hero = () => {
+  const navigate = useNavigate();
   return (
     <section className="relative min-h-screen flex items-center justify-center bg-gradient-hero overflow-hidden">
       {/* Background Image Overlay */}
@@ -26,7 +28,12 @@ export const Hero = () => {
         </p>
         
         <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <Button variant="hero" size="lg" className="text-lg px-8 py-6">
+          <Button 
+            variant="hero" 
+            size="lg" 
+            className="text-lg px-8 py-6"
+            onClick={() => navigate('/generate')}
+          >
             Start Creating
           </Button>
           <Button variant="secondary" size="lg" className="text-lg px-8 py-6">
