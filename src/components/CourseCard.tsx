@@ -11,6 +11,7 @@ interface CourseCardProps {
   rating: number;
   level: string;
   image?: string;
+  id?: string;
 }
 
 export const CourseCard = ({ 
@@ -19,7 +20,8 @@ export const CourseCard = ({
   duration, 
   students, 
   rating, 
-  level 
+  level,
+  id 
 }: CourseCardProps) => {
   return (
     <Card className="group hover:shadow-elegant transition-all duration-300 hover:-translate-y-1 bg-card border-border/50">
@@ -60,7 +62,11 @@ export const CourseCard = ({
           </div>
         </div>
         
-        <Button variant="outline" className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+        <Button 
+          variant="outline" 
+          className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
+          onClick={() => window.location.href = `/course/${id || 'sample'}`}
+        >
           View Course
         </Button>
       </CardContent>
