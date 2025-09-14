@@ -1,4 +1,9 @@
 # Logs
+bun
+bun.lockb
+.env
+.env.*.local
+.env.local
 logs
 *.log
 npm-debug.log*
