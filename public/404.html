@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CourseGen - Redirecting...</title>
+  <script>
+    // Store the current path and redirect to index.html with the path as a hash
+    var path = window.location.pathname;
+    var search = window.location.search;
+    
+    // Convert the path to hash-based routing
+    var redirect = window.location.origin + '/#' + path + search;
+    
+    // Redirect to the hash-based route
+    window.location.replace(redirect);
+  </script>
+</head>
+<body>
+  <p>Redirecting to CourseGen...</p>
+</body>
+</html>
