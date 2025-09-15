@@ -133,6 +133,13 @@ const LessonView = () => {
                     pre: ({children}) => <pre className="bg-muted p-4 rounded-lg overflow-x-auto mb-4">{children}</pre>,
                     strong: ({children}) => <strong className="font-semibold text-foreground">{children}</strong>,
                     em: ({children}) => <em className="italic text-foreground">{children}</em>,
+                    img: ({src, alt}) => (
+                      <img 
+                        src={src} 
+                        alt={alt || "Lesson image"} 
+                        className="w-full max-w-2xl mx-auto rounded-lg shadow-lg my-6 first:mt-0" 
+                      />
+                    ),
                   }}
                 >
                   {lesson.content || 'No content available for this lesson.'}

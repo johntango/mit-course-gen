@@ -158,9 +158,9 @@ const CourseManagement = () => {
         .from('course-images')
         .getPublicUrl(filePath);
 
-      // Insert image markdown into lesson content at cursor position
-      const imageMarkdown = `\n![Image](${publicUrl})\n`;
-      setLessonContent(prev => prev + imageMarkdown);
+      // Insert image markdown at the beginning of lesson content
+      const imageMarkdown = `![Image](${publicUrl})\n\n`;
+      setLessonContent(prev => imageMarkdown + prev);
 
       toast({
         title: "Image uploaded",
