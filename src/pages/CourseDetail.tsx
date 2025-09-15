@@ -39,7 +39,12 @@ const CourseDetail = () => {
         .order("position");
       
       if (error) throw error;
-      return data;
+      
+      // Sort lessons by position within each module
+      return data?.map(module => ({
+        ...module,
+        lessons: module.lessons?.sort((a, b) => a.position - b.position) || []
+      })) || [];
     },
     enabled: !!courseId,
   });
