@@ -1,6 +1,7 @@
 # Welcome to your Lovable project
 
 ## Project info
+Secrets need to be stored in Supabase 
 
 **URL**: https://lovable.dev/projects/5fedb6cc-9d1a-4069-a54b-175c2ee82bde
 
