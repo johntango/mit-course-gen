@@ -77,6 +77,40 @@ const CourseManagement = () => {
   // Delete course mutation
   const deleteCourse = useMutation({
     mutationFn: async () => {
+      // Delete related records in correct order
+      // 1. Delete lessons first (they reference modules)
+      const { data: modulesData } = await supabase
+        .from("modules")
+        .select("id")
+        .eq("course_id", courseId);
+      
+      if (modulesData && modulesData.length > 0) {
+        const moduleIds = modulesData.map(m => m.id);
+        await supabase
+          .from("lessons")
+          .delete()
+          .in("module_id", moduleIds);
+      }
+      
+      // 2. Delete modules (they reference courses)
+      await supabase
+        .from("modules")
+        .delete()
+        .eq("course_id", courseId);
+      
+      // 3. Delete course specs (they reference courses)
+      await supabase
+        .from("course_specs")
+        .delete()
+        .eq("course_id", courseId);
+      
+      // 4. Set agent_runs course_id to null (nullable reference)
+      await supabase
+        .from("agent_runs")
+        .update({ course_id: null })
+        .eq("course_id", courseId);
+      
+      // 5. Finally delete the course
       const { error } = await supabase
         .from("courses")
         .delete()
@@ -87,14 +121,15 @@ const CourseManagement = () => {
     onSuccess: () => {
       toast({
         title: "Course deleted",
-        description: "Course has been successfully deleted.",
+        description: "Course and all related content have been successfully deleted.",
       });
       navigate("/");
     },
-    onError: () => {
+    onError: (error) => {
+      console.error('Delete error:', error);
       toast({
         title: "Error",
-        description: "Failed to delete course.",
+        description: "Failed to delete course. Please try again.",
         variant: "destructive",
       });
     },
