@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Clock, BookOpen, Play } from "lucide-react";
+import { ArrowLeft, Clock, BookOpen, Play, Settings } from "lucide-react";
 
 const CourseDetail = () => {
   const { courseId } = useParams();
@@ -82,14 +82,23 @@ const CourseDetail = () => {
   return (
     <div className="min-h-screen bg-gradient-secondary">
       <div className="container mx-auto py-12">
-        <Button 
-          onClick={() => navigate("/")} 
-          variant="ghost" 
-          className="mb-6"
-        >
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Courses
-        </Button>
+        <div className="flex items-center justify-between mb-6">
+          <Button 
+            onClick={() => navigate("/")} 
+            variant="ghost"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Courses
+          </Button>
+          
+          <Button 
+            onClick={() => navigate(`/course/${courseId}/manage`)}
+            variant="outline"
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Manage Course
+          </Button>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Course Content */}

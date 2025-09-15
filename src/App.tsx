@@ -6,6 +6,7 @@ import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import CourseGeneration from "./pages/CourseGeneration";
 import CourseDetail from "./pages/CourseDetail";
+import CourseManagement from "./pages/CourseManagement";
 import LessonView from "./pages/LessonView";
 import NotFound from "./pages/NotFound";
 
@@ -21,6 +22,7 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/generate" element={<CourseGeneration />} />
           <Route path="/course/:courseId" element={<CourseDetail />} />
+          <Route path="/course/:courseId/manage" element={<CourseManagement />} />
           <Route path="/course/:courseId/lesson/:lessonId" element={<LessonView />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
