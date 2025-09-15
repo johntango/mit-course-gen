@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Edit3, Trash2, Save, Upload, X } from "lucide-react";
+import { ArrowLeft, Edit3, Trash2, Save, Upload, X, Image } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -162,6 +162,33 @@ const CourseManagement = () => {
     },
   });
 
+  // Populate images mutation
+  const populateImages = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('populate-course-images', {
+        body: { courseId }
+      });
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Images populated",
+        description: `Successfully processed ${data.processedLessons}/${data.totalLessons} lessons with images.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["modules", courseId] });
+    },
+    onError: (error) => {
+      console.error('Populate images error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to populate images. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleEditLesson = (lesson: any) => {
     setEditingLesson(lesson.id);
     setLessonTitle(lesson.title);
@@ -258,29 +285,42 @@ const CourseManagement = () => {
             Back to Course
           </Button>
           
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive">
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete Course
+          <div className="flex gap-2">
+            {course.status === 'completed' && (
+              <Button
+                onClick={() => populateImages.mutate()}
+                disabled={populateImages.isPending}
+                variant="outline"
+              >
+                <Image className="w-4 h-4 mr-2" />
+                {populateImages.isPending ? 'Populating Images...' : 'Populate Images'}
               </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete the course
-                  and all its modules and lessons.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => deleteCourse.mutate()}>
+            )}
+            
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive">
+                  <Trash2 className="w-4 h-4 mr-2" />
                   Delete Course
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete the course
+                    and all its modules and lessons.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => deleteCourse.mutate()}>
+                    Delete Course
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
 
         <Card className="bg-card border-border/50 mb-6">
