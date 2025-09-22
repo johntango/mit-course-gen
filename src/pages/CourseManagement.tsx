@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Edit3, Trash2, Save, Upload, X, Image } from "lucide-react";
+import { ArrowLeft, Edit3, Trash2, Save, Upload, X, Image, FileText, Clapperboard, Loader2, Copy, Trash } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,6 +23,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+const DEFAULT_MINUTES = "3"; // sensible default
+
 const CourseManagement = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
@@ -33,6 +35,11 @@ const CourseManagement = () => {
   const [lessonContent, setLessonContent] = useState("");
   const [lessonTitle, setLessonTitle] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Per-lesson target lengths (minutes as string to preserve decimals like "1.5")
+  const [lengthMinutesByLesson, setLengthMinutesByLesson] = useState<Record<string, string>>({});
+  // Local drafts of generated scripts (for preview/copy)
+  const [scriptDrafts, setScriptDrafts] = useState<Record<string, string>>({});
 
   // Fetch course data
   const { data: course, isLoading: courseLoading } = useQuery({
@@ -66,9 +73,9 @@ const CourseManagement = () => {
       if (error) throw error;
       
       // Sort lessons by position within each module
-      return data?.map(module => ({
+      return data?.map((module: any) => ({
         ...module,
-        lessons: module.lessons?.sort((a, b) => a.position - b.position) || []
+        lessons: module.lessons?.sort((a: any, b: any) => a.position - b.position) || []
       })) || [];
     },
     enabled: !!courseId,
@@ -85,7 +92,7 @@ const CourseManagement = () => {
         .eq("course_id", courseId);
       
       if (modulesData && modulesData.length > 0) {
-        const moduleIds = modulesData.map(m => m.id);
+        const moduleIds = modulesData.map((m: any) => m.id);
         await supabase
           .from("lessons")
           .delete()
@@ -162,7 +169,7 @@ const CourseManagement = () => {
     },
   });
 
-  // Populate images mutation
+  // Populate images mutation (existing)
   const populateImages = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('populate-course-images', {
@@ -172,7 +179,7 @@ const CourseManagement = () => {
       if (error) throw error;
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data: any) => {
       toast({
         title: "Images populated",
         description: `Successfully processed ${data.processedLessons}/${data.totalLessons} lessons with images.`,
@@ -187,6 +194,75 @@ const CourseManagement = () => {
         variant: "destructive",
       });
     },
+  });
+
+  // --- NEW: Generate Script (per lesson)
+  const generateLessonScript = useMutation({
+    mutationFn: async ({ lessonId, minutes }: { lessonId: string; minutes: number }) => {
+      // Expected Edge Function contract:
+      //   name: generate-lesson-script
+      //   body: { lessonId, targetDurationMinutes }
+      //   returns: { script: string, videoRowId?: string }
+      const { data, error } = await supabase.functions.invoke('generate-lesson-script', {
+        body: { lessonId, targetDurationMinutes: minutes }
+      });
+      if (error) throw error;
+      return data as { script: string; videoRowId?: string };
+    },
+    onSuccess: (data, vars) => {
+      setScriptDrafts(prev => ({ ...prev, [vars.lessonId]: data.script }));
+      toast({
+        title: "Script generated",
+        description: "A draft narration script has been generated.",
+      });
+    },
+    onError: (err: any) => {
+      console.error("generate-lesson-script error:", err);
+      toast({
+        title: "Error",
+        description: "Failed to generate script. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
+
+  // --- NEW: Generate & Insert Video (per lesson)
+  const generateLessonVideo = useMutation({
+    mutationFn: async ({ lessonId, minutes, forceRegenerate = false }: { lessonId: string; minutes: number; forceRegenerate?: boolean }) => {
+      // Expected Edge Function contract:
+      //   name: generate-lesson-video
+      //   body: { lessonId, targetDurationMinutes, forceRegenerate? }
+      //   returns: { success: boolean, videoUrl?: string }
+      const { data, error } = await supabase.functions.invoke('generate-lesson-video', {
+        body: { lessonId, targetDurationMinutes: minutes, forceRegenerate }
+      });
+      if (error) throw error;
+      return data as { success: boolean; videoUrl?: string };
+    },
+    onSuccess: (data) => {
+      if (data?.success) {
+        toast({
+          title: "Video generated",
+          description: "The video was generated and the link was inserted into the lesson.",
+        });
+        // Re-fetch to show updated content snippet
+        queryClient.invalidateQueries({ queryKey: ["modules", courseId] });
+      } else {
+        toast({
+          title: "Video generation incomplete",
+          description: "The request did not complete successfully.",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (err: any) => {
+      console.error("generate-lesson-video error:", err);
+      toast({
+        title: "Error",
+        description: "Failed to generate video. Please try again.",
+        variant: "destructive",
+      });
+    }
   });
 
   const handleEditLesson = (lesson: any) => {
@@ -242,6 +318,31 @@ const CourseManagement = () => {
       });
     } finally {
       setUploadingImage(false);
+    }
+  };
+
+  // Helpers for minutes input
+  const getMinutesForLesson = (lessonId: string) => {
+    return lengthMinutesByLesson[lessonId] ?? DEFAULT_MINUTES;
+  };
+  const setMinutesForLesson = (lessonId: string, value: string) => {
+    // Keep only digits and a single dot; allow empty string to let user clear
+    const cleaned = value.replace(/[^\d.]/g, "");
+    const parts = cleaned.split(".");
+    const normalized =
+      parts.length <= 2
+        ? (parts.length === 2 ? `${parts[0]}.${parts[1].slice(0, 2)}` : parts[0])
+        : cleaned; // don’t over-aggressively sanitize
+    setLengthMinutesByLesson(prev => ({ ...prev, [lessonId]: normalized }));
+  };
+
+  // UI helpers
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ title: "Copied", description: "Script copied to clipboard." });
+    } catch {
+      toast({ title: "Copy failed", description: "Could not copy to clipboard.", variant: "destructive" });
     }
   };
 
@@ -335,7 +436,7 @@ const CourseManagement = () => {
         </Card>
 
         <div className="space-y-6">
-          {modules?.map((module, moduleIndex) => (
+          {modules?.map((module: any, moduleIndex: number) => (
             <Card key={module.id} className="bg-card border-border/50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -347,100 +448,197 @@ const CourseManagement = () => {
                 <CardDescription>{module.description}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {module.lessons?.map((lesson, lessonIndex) => (
-                  <div key={lesson.id} className="border border-border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">
-                          Lesson {lessonIndex + 1}
-                        </Badge>
-                        <span className="font-medium">{lesson.title}</span>
-                      </div>
-                      {editingLesson === lesson.id ? (
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={handleSaveLesson}
-                            disabled={updateLesson.isPending}
-                          >
-                            <Save className="w-4 h-4 mr-1" />
-                            Save
-                          </Button>
+                {module.lessons?.map((lesson: any, lessonIndex: number) => {
+                  const minutesStr = getMinutesForLesson(lesson.id);
+                  const minutesNum = parseFloat(minutesStr || DEFAULT_MINUTES);
+                  const isGenScriptPending = generateLessonScript.isPending && (generateLessonScript.variables as any)?.lessonId === lesson.id;
+                  const isGenVideoPending = generateLessonVideo.isPending && (generateLessonVideo.variables as any)?.lessonId === lesson.id;
+
+                  return (
+                    <div key={lesson.id} className="border border-border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">
+                            Lesson {lessonIndex + 1}
+                          </Badge>
+                          <span className="font-medium">{lesson.title}</span>
+                        </div>
+                        {editingLesson === lesson.id ? (
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              onClick={handleSaveLesson}
+                              disabled={updateLesson.isPending}
+                            >
+                              <Save className="w-4 h-4 mr-1" />
+                              Save
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditingLesson(null)}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ) : (
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setEditingLesson(null)}
+                            onClick={() => handleEditLesson(lesson)}
                           >
-                            <X className="w-4 h-4" />
+                            <Edit3 className="w-4 h-4 mr-1" />
+                            Edit
                           </Button>
+                        )}
+                      </div>
+
+                      {/* NEW: Video tools */}
+                      <div className="rounded-md border border-border/60 p-3 mb-3">
+                        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+                          <div className="w-full md:max-w-xs">
+                            <Label htmlFor={`minutes-${lesson.id}`}>Target length (minutes)</Label>
+                            <Input
+                              id={`minutes-${lesson.id}`}
+                              type="number"
+                              step="0.5"
+                              min="0.5"
+                              value={minutesStr}
+                              onChange={(e) => setMinutesForLesson(lesson.id, e.target.value)}
+                              placeholder={DEFAULT_MINUTES}
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Decimals allowed, e.g., <code>1.5</code> for ~90 seconds.
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => generateLessonScript.mutate({ lessonId: lesson.id, minutes: isNaN(minutesNum) ? 3 : minutesNum })}
+                              disabled={isGenScriptPending}
+                            >
+                              {isGenScriptPending ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Generating Script...
+                                </>
+                              ) : (
+                                <>
+                                  <FileText className="w-4 h-4 mr-2" />
+                                  Generate Script
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => generateLessonVideo.mutate({ lessonId: lesson.id, minutes: isNaN(minutesNum) ? 3 : minutesNum })}
+                              disabled={isGenVideoPending}
+                            >
+                              {isGenVideoPending ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Generating Video...
+                                </>
+                              ) : (
+                                <>
+                                  <Clapperboard className="w-4 h-4 mr-2" />
+                                  Generate & Insert Video
+                                </>
+                              )}
+                            </Button>
+                          </div>
                         </div>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleEditLesson(lesson)}
-                        >
-                          <Edit3 className="w-4 h-4 mr-1" />
-                          Edit
-                        </Button>
-                      )}
-                    </div>
-                    
-                    {editingLesson === lesson.id ? (
-                      <div className="space-y-4">
-                        <div>
-                          <Label htmlFor="lesson-title">Lesson Title</Label>
-                          <Input
-                            id="lesson-title"
-                            value={lessonTitle}
-                            onChange={(e) => setLessonTitle(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <Label htmlFor="lesson-content">Lesson Content</Label>
-                            <div className="flex gap-2">
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={handleImageUpload}
-                                className="hidden"
-                                id="image-upload"
-                              />
+
+                        {/* Optional: show local script draft if available */}
+                        {scriptDrafts[lesson.id] && (
+                          <div className="mt-3">
+                            <Label>Draft Script (preview)</Label>
+                            <Textarea
+                              value={scriptDrafts[lesson.id]}
+                              onChange={(e) => setScriptDrafts(prev => ({ ...prev, [lesson.id]: e.target.value }))}
+                              rows={8}
+                            />
+                            <div className="mt-2 flex gap-2">
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => document.getElementById('image-upload')?.click()}
-                                disabled={uploadingImage}
+                                onClick={() => copyToClipboard(scriptDrafts[lesson.id])}
                               >
-                                <Upload className="w-4 h-4 mr-1" />
-                                {uploadingImage ? 'Uploading...' : 'Add Image'}
+                                <Copy className="w-4 h-4 mr-2" />
+                                Copy
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setScriptDrafts(prev => {
+                                  const next = { ...prev }; delete next[lesson.id]; return next;
+                                })}
+                              >
+                                <Trash className="w-4 h-4 mr-2" />
+                                Clear Preview
                               </Button>
                             </div>
                           </div>
-                          <Textarea
-                            id="lesson-content"
-                            value={lessonContent}
-                            onChange={(e) => setLessonContent(e.target.value)}
-                            rows={10}
-                            placeholder="Enter lesson content (supports Markdown)..."
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-muted-foreground">
-                        {lesson.content ? (
-                          <div className="prose max-w-none">
-                            {lesson.content.substring(0, 200)}
-                            {lesson.content.length > 200 && "..."}
-                          </div>
-                        ) : (
-                          <em>No content yet</em>
                         )}
                       </div>
-                    )}
-                  </div>
-                ))}
+                    
+                      {editingLesson === lesson.id ? (
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="lesson-title">Lesson Title</Label>
+                            <Input
+                              id="lesson-title"
+                              value={lessonTitle}
+                              onChange={(e) => setLessonTitle(e.target.value)}
+                            />
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <Label htmlFor="lesson-content">Lesson Content</Label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  onChange={handleImageUpload}
+                                  className="hidden"
+                                  id="image-upload"
+                                />
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => document.getElementById('image-upload')?.click()}
+                                  disabled={uploadingImage}
+                                >
+                                  <Upload className="w-4 h-4 mr-1" />
+                                  {uploadingImage ? 'Uploading...' : 'Add Image'}
+                                </Button>
+                              </div>
+                            </div>
+                            <Textarea
+                              id="lesson-content"
+                              value={lessonContent}
+                              onChange={(e) => setLessonContent(e.target.value)}
+                              rows={10}
+                              placeholder="Enter lesson content (supports Markdown)..."
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-muted-foreground">
+                          {lesson.content ? (
+                            <div className="prose max-w-none">
+                              {lesson.content.substring(0, 200)}
+                              {lesson.content.length > 200 && "..."}
+                            </div>
+                          ) : (
+                            <em>No content yet</em>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </CardContent>
             </Card>
           ))}
