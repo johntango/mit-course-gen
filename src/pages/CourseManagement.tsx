@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +10,20 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Edit3, Trash2, Save, Upload, X, Image, FileText, Clapperboard, Loader2, Copy, Trash } from "lucide-react";
+import {
+  ArrowLeft,
+  Edit3,
+  Trash2,
+  Save,
+  Upload,
+  X,
+  Image,
+  FileText,
+  Clapperboard,
+  Loader2,
+  Copy,
+  Trash,
+} from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,25 +36,25 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-const DEFAULT_MINUTES = "3"; // sensible default
+const DEFAULT_MINUTES = "3";
 
 const CourseManagement = () => {
   const { courseId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
+
   const [editingLesson, setEditingLesson] = useState<string | null>(null);
   const [lessonContent, setLessonContent] = useState("");
   const [lessonTitle, setLessonTitle] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
 
-  // Per-lesson target lengths (minutes as string to preserve decimals like "1.5")
+  // Per-lesson target durations (string to preserve decimals like "1.5")
   const [lengthMinutesByLesson, setLengthMinutesByLesson] = useState<Record<string, string>>({});
-  // Local drafts of generated scripts (for preview/copy)
+  // Local draft scripts for preview/copy
   const [scriptDrafts, setScriptDrafts] = useState<Record<string, string>>({});
 
-  // Fetch course data
+  // Fetch course
   const { data: course, isLoading: courseLoading } = useQuery({
     queryKey: ["course", courseId],
     queryFn: async () => {
@@ -50,7 +63,6 @@ const CourseManagement = () => {
         .select("*")
         .eq("id", courseId)
         .single();
-      
       if (error) throw error;
       return data;
     },
@@ -69,60 +81,36 @@ const CourseManagement = () => {
         `)
         .eq("course_id", courseId)
         .order("position");
-      
       if (error) throw error;
-      
-      // Sort lessons by position within each module
-      return data?.map((module: any) => ({
-        ...module,
-        lessons: module.lessons?.sort((a: any, b: any) => a.position - b.position) || []
-      })) || [];
+
+      return (
+        data?.map((module: any) => ({
+          ...module,
+          lessons: module.lessons?.sort((a: any, b: any) => a.position - b.position) || [],
+        })) || []
+      );
     },
     enabled: !!courseId,
   });
 
-  // Delete course mutation
+  // Delete course (cascaded sequence)
   const deleteCourse = useMutation({
     mutationFn: async () => {
-      // Delete related records in correct order
-      // 1. Delete lessons first (they reference modules)
       const { data: modulesData } = await supabase
         .from("modules")
         .select("id")
         .eq("course_id", courseId);
-      
+
       if (modulesData && modulesData.length > 0) {
         const moduleIds = modulesData.map((m: any) => m.id);
-        await supabase
-          .from("lessons")
-          .delete()
-          .in("module_id", moduleIds);
+        await supabase.from("lessons").delete().in("module_id", moduleIds);
       }
-      
-      // 2. Delete modules (they reference courses)
-      await supabase
-        .from("modules")
-        .delete()
-        .eq("course_id", courseId);
-      
-      // 3. Delete course specs (they reference courses)
-      await supabase
-        .from("course_specs")
-        .delete()
-        .eq("course_id", courseId);
-      
-      // 4. Set agent_runs course_id to null (nullable reference)
-      await supabase
-        .from("agent_runs")
-        .update({ course_id: null })
-        .eq("course_id", courseId);
-      
-      // 5. Finally delete the course
-      const { error } = await supabase
-        .from("courses")
-        .delete()
-        .eq("id", courseId);
-      
+
+      await supabase.from("modules").delete().eq("course_id", courseId);
+      await supabase.from("course_specs").delete().eq("course_id", courseId);
+      await supabase.from("agent_runs").update({ course_id: null }).eq("course_id", courseId);
+
+      const { error } = await supabase.from("courses").delete().eq("id", courseId);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -133,7 +121,7 @@ const CourseManagement = () => {
       navigate("/");
     },
     onError: (error) => {
-      console.error('Delete error:', error);
+      console.error("Delete error:", error);
       toast({
         title: "Error",
         description: "Failed to delete course. Please try again.",
@@ -142,21 +130,22 @@ const CourseManagement = () => {
     },
   });
 
-  // Update lesson mutation
+  // Update lesson
   const updateLesson = useMutation({
-    mutationFn: async ({ lessonId, title, content }: { lessonId: string; title: string; content: string }) => {
-      const { error } = await supabase
-        .from("lessons")
-        .update({ title, content })
-        .eq("id", lessonId);
-      
+    mutationFn: async ({
+      lessonId,
+      title,
+      content,
+    }: {
+      lessonId: string;
+      title: string;
+      content: string;
+    }) => {
+      const { error } = await supabase.from("lessons").update({ title, content }).eq("id", lessonId);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast({
-        title: "Lesson updated",
-        description: "Lesson has been successfully updated.",
-      });
+      toast({ title: "Lesson updated", description: "Lesson has been successfully updated." });
       setEditingLesson(null);
       queryClient.invalidateQueries({ queryKey: ["modules", courseId] });
     },
@@ -169,13 +158,12 @@ const CourseManagement = () => {
     },
   });
 
-  // Populate images mutation (existing)
+  // Populate images
   const populateImages = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('populate-course-images', {
-        body: { courseId }
+      const { data, error } = await supabase.functions.invoke("populate-course-images", {
+        body: { courseId },
       });
-
       if (error) throw error;
       return data;
     },
@@ -187,7 +175,7 @@ const CourseManagement = () => {
       queryClient.invalidateQueries({ queryKey: ["modules", courseId] });
     },
     onError: (error) => {
-      console.error('Populate images error:', error);
+      console.error("Populate images error:", error);
       toast({
         title: "Error",
         description: "Failed to populate images. Please try again.",
@@ -196,25 +184,58 @@ const CourseManagement = () => {
     },
   });
 
-  // --- NEW: Generate Script (per lesson)
-  const generateLessonScript = useMutation({
-    mutationFn: async ({ lessonId, minutes }: { lessonId: string; minutes: number }) => {
-      // Expected Edge Function contract:
-      //   name: generate-lesson-script
-      //   body: { lessonId, targetDurationMinutes }
-      //   returns: { script: string, videoRowId?: string }
-      const { data, error } = await supabase.functions.invoke('generate-lesson-script', {
-        body: { lessonId, targetDurationMinutes: minutes }
+  // NEW: Sweeper to finalize long-running HeyGen renders
+  const refreshCourseVideos = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("refresh-course-videos", {
+        body: { courseId, limit: 100 },
       });
       if (error) throw error;
-      return data as { script: string; videoRowId?: string };
+      return data;
+    },
+    onSuccess: (data: any) => {
+      const completed = data?.summary?.completed ?? 0;
+      if (completed > 0) {
+        toast({
+          title: "Videos updated",
+          description: `${completed} video(s) completed and inserted.`,
+        });
+      } else {
+        toast({
+          title: "No updates",
+          description: "No videos completed since the last check.",
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["modules", courseId] });
+    },
+    onError: (error) => {
+      console.error("refresh-course-videos error:", error);
+      toast({
+        title: "Error",
+        description: "Failed to check video status.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Fire a sweep when the page loads / course changes
+  useEffect(() => {
+    if (courseId) refreshCourseVideos.mutate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId]);
+
+  // NEW: Generate script (per lesson)
+  const generateLessonScript = useMutation({
+    mutationFn: async ({ lessonId, minutes }: { lessonId: string; minutes: number }) => {
+      const { data, error } = await supabase.functions.invoke("generate-lesson-script", {
+        body: { lessonId, targetDurationMinutes: minutes },
+      });
+      if (error) throw error;
+      return data as { script: string };
     },
     onSuccess: (data, vars) => {
-      setScriptDrafts(prev => ({ ...prev, [vars.lessonId]: data.script }));
-      toast({
-        title: "Script generated",
-        description: "A draft narration script has been generated.",
-      });
+      setScriptDrafts((prev) => ({ ...prev, [vars.lessonId]: data.script }));
+      toast({ title: "Script generated", description: "A draft narration script has been generated." });
     },
     onError: (err: any) => {
       console.error("generate-lesson-script error:", err);
@@ -223,37 +244,43 @@ const CourseManagement = () => {
         description: "Failed to generate script. Please try again.",
         variant: "destructive",
       });
-    }
+    },
   });
 
-  // --- NEW: Generate & Insert Video (per lesson)
+  // NEW: Generate & Insert Video (per lesson) – non-blocking (returns 202)
   const generateLessonVideo = useMutation({
-    mutationFn: async ({ lessonId, minutes, forceRegenerate = false }: { lessonId: string; minutes: number; forceRegenerate?: boolean }) => {
-      // Expected Edge Function contract:
-      //   name: generate-lesson-video
-      //   body: { lessonId, targetDurationMinutes, forceRegenerate? }
-      //   returns: { success: boolean, videoUrl?: string }
-      const { data, error } = await supabase.functions.invoke('generate-lesson-video', {
-        body: { lessonId, targetDurationMinutes: minutes, forceRegenerate }
+    mutationFn: async ({
+      lessonId,
+      minutes,
+      forceRegenerate = false,
+    }: {
+      lessonId: string;
+      minutes: number;
+      forceRegenerate?: boolean;
+    }) => {
+      const { data, error } = await supabase.functions.invoke("generate-lesson-video", {
+        body: { lessonId, targetDurationMinutes: minutes, forceRegenerate },
       });
       if (error) throw error;
-      return data as { success: boolean; videoUrl?: string };
+      return data as {
+        accepted: boolean;
+        status: "processing" | "reused" | "skipped";
+        lessonVideoId?: string;
+        providerVideoId?: string;
+      };
     },
     onSuccess: (data) => {
-      if (data?.success) {
-        toast({
-          title: "Video generated",
-          description: "The video was generated and the link was inserted into the lesson.",
-        });
-        // Re-fetch to show updated content snippet
-        queryClient.invalidateQueries({ queryKey: ["modules", courseId] });
-      } else {
-        toast({
-          title: "Video generation incomplete",
-          description: "The request did not complete successfully.",
-          variant: "destructive",
-        });
-      }
+      const status = data?.status ?? "processing";
+      let description = "Video job accepted.";
+      if (status === "reused") description = "Reusing an existing in-flight job.";
+      if (status === "skipped") description = "Skipped (existing canonical video).";
+      toast({
+        title: "Generate Video",
+        description,
+      });
+      // Kick a background sweep to pick up any fast completions
+      refreshCourseVideos.mutate();
+      queryClient.invalidateQueries({ queryKey: ["modules", courseId] });
     },
     onError: (err: any) => {
       console.error("generate-lesson-video error:", err);
@@ -262,7 +289,7 @@ const CourseManagement = () => {
         description: "Failed to generate video. Please try again.",
         variant: "destructive",
       });
-    }
+    },
   });
 
   const handleEditLesson = (lesson: any) => {
@@ -281,62 +308,58 @@ const CourseManagement = () => {
     }
   };
 
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleImageUpload =
+    (lessonIdForInput?: string) => async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
 
-    setUploadingImage(true);
-    try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      const filePath = `lessons/${fileName}`;
+      setUploadingImage(true);
+      try {
+        const fileExt = file.name.split(".").pop();
+        const fileName = `${Date.now()}.${fileExt}`;
+        const filePath = `lessons/${fileName}`;
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('course-images')
-        .upload(filePath, file);
+        const { error: uploadError } = await supabase.storage.from("course-images").upload(filePath, file);
+        if (uploadError) throw uploadError;
 
-      if (uploadError) throw uploadError;
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from("course-images").getPublicUrl(filePath);
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('course-images')
-        .getPublicUrl(filePath);
+        const imageMarkdown = `![Image](${publicUrl})\n\n`;
+        setLessonContent((prev) => imageMarkdown + prev);
 
-      // Insert image markdown at the beginning of lesson content
-      const imageMarkdown = `![Image](${publicUrl})\n\n`;
-      setLessonContent(prev => imageMarkdown + prev);
+        toast({
+          title: "Image uploaded",
+          description: "Image has been uploaded and added to lesson content.",
+        });
+      } catch (error) {
+        console.error("Error uploading image:", error);
+        toast({
+          title: "Error",
+          description: "Failed to upload image.",
+          variant: "destructive",
+        });
+      } finally {
+        setUploadingImage(false);
+        // clear input value to allow re-uploading same file if needed
+        if (lessonIdForInput) {
+          const el = document.getElementById(`image-upload-${lessonIdForInput}`) as HTMLInputElement | null;
+          if (el) el.value = "";
+        }
+      }
+    };
 
-      toast({
-        title: "Image uploaded",
-        description: "Image has been uploaded and added to lesson content.",
-      });
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      toast({
-        title: "Error",
-        description: "Failed to upload image.",
-        variant: "destructive",
-      });
-    } finally {
-      setUploadingImage(false);
-    }
-  };
-
-  // Helpers for minutes input
   const getMinutesForLesson = (lessonId: string) => {
     return lengthMinutesByLesson[lessonId] ?? DEFAULT_MINUTES;
   };
   const setMinutesForLesson = (lessonId: string, value: string) => {
-    // Keep only digits and a single dot; allow empty string to let user clear
     const cleaned = value.replace(/[^\d.]/g, "");
     const parts = cleaned.split(".");
-    const normalized =
-      parts.length <= 2
-        ? (parts.length === 2 ? `${parts[0]}.${parts[1].slice(0, 2)}` : parts[0])
-        : cleaned; // don’t over-aggressively sanitize
-    setLengthMinutesByLesson(prev => ({ ...prev, [lessonId]: normalized }));
+    const normalized = parts.length <= 2 ? (parts.length === 2 ? `${parts[0]}.${parts[1].slice(0, 2)}` : parts[0]) : cleaned;
+    setLengthMinutesByLesson((prev) => ({ ...prev, [lessonId]: normalized }));
   };
 
-  // UI helpers
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -378,26 +401,35 @@ const CourseManagement = () => {
     <div className="min-h-screen bg-gradient-secondary">
       <div className="container mx-auto py-12">
         <div className="flex items-center justify-between mb-6">
-          <Button 
-            onClick={() => navigate(`/course/${courseId}`)} 
-            variant="ghost"
-          >
+          <Button onClick={() => navigate(`/course/${courseId}`)} variant="ghost">
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Course
           </Button>
-          
+
           <div className="flex gap-2">
-            {course.status === 'completed' && (
-              <Button
-                onClick={() => populateImages.mutate()}
-                disabled={populateImages.isPending}
-                variant="outline"
-              >
-                <Image className="w-4 h-4 mr-2" />
-                {populateImages.isPending ? 'Populating Images...' : 'Populate Images'}
-              </Button>
+            {course.status === "completed" && (
+              <>
+                <Button onClick={() => populateImages.mutate()} disabled={populateImages.isPending} variant="outline">
+                  <Image className="w-4 h-4 mr-2" />
+                  {populateImages.isPending ? "Populating Images..." : "Populate Images"}
+                </Button>
+                <Button
+                  onClick={() => refreshCourseVideos.mutate()}
+                  disabled={refreshCourseVideos.isPending}
+                  variant="outline"
+                >
+                  {refreshCourseVideos.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Checking Videos…
+                    </>
+                  ) : (
+                    "Check Video Status"
+                  )}
+                </Button>
+              </>
             )}
-            
+
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive">
@@ -409,15 +441,12 @@ const CourseManagement = () => {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete the course
-                    and all its modules and lessons.
+                    This action cannot be undone. This will permanently delete the course and all its modules and lessons.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => deleteCourse.mutate()}>
-                    Delete Course
-                  </AlertDialogAction>
+                  <AlertDialogAction onClick={() => deleteCourse.mutate()}>Delete Course</AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -426,12 +455,8 @@ const CourseManagement = () => {
 
         <Card className="bg-card border-border/50 mb-6">
           <CardHeader>
-            <CardTitle className="text-3xl font-bold text-foreground">
-              Manage Course: {course.title}
-            </CardTitle>
-            <CardDescription>
-              Edit course content, modules, and lessons
-            </CardDescription>
+            <CardTitle className="text-3xl font-bold text-foreground">Manage Course: {course.title}</CardTitle>
+            <CardDescription>Edit course content, modules, and lessons</CardDescription>
           </CardHeader>
         </Card>
 
@@ -451,49 +476,38 @@ const CourseManagement = () => {
                 {module.lessons?.map((lesson: any, lessonIndex: number) => {
                   const minutesStr = getMinutesForLesson(lesson.id);
                   const minutesNum = parseFloat(minutesStr || DEFAULT_MINUTES);
-                  const isGenScriptPending = generateLessonScript.isPending && (generateLessonScript.variables as any)?.lessonId === lesson.id;
-                  const isGenVideoPending = generateLessonVideo.isPending && (generateLessonVideo.variables as any)?.lessonId === lesson.id;
+                  const isGenScriptPending =
+                    generateLessonScript.isPending &&
+                    (generateLessonScript.variables as any)?.lessonId === lesson.id;
+                  const isGenVideoPending =
+                    generateLessonVideo.isPending && (generateLessonVideo.variables as any)?.lessonId === lesson.id;
 
                   return (
                     <div key={lesson.id} className="border border-border rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <Badge variant="secondary">
-                            Lesson {lessonIndex + 1}
-                          </Badge>
+                          <Badge variant="secondary">Lesson {lessonIndex + 1}</Badge>
                           <span className="font-medium">{lesson.title}</span>
                         </div>
                         {editingLesson === lesson.id ? (
                           <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              onClick={handleSaveLesson}
-                              disabled={updateLesson.isPending}
-                            >
+                            <Button size="sm" onClick={handleSaveLesson} disabled={updateLesson.isPending}>
                               <Save className="w-4 h-4 mr-1" />
                               Save
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setEditingLesson(null)}
-                            >
+                            <Button size="sm" variant="ghost" onClick={() => setEditingLesson(null)}>
                               <X className="w-4 h-4" />
                             </Button>
                           </div>
                         ) : (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleEditLesson(lesson)}
-                          >
+                          <Button size="sm" variant="ghost" onClick={() => handleEditLesson(lesson)}>
                             <Edit3 className="w-4 h-4 mr-1" />
                             Edit
                           </Button>
                         )}
                       </div>
 
-                      {/* NEW: Video tools */}
+                      {/* Video tools */}
                       <div className="rounded-md border border-border/60 p-3 mb-3">
                         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
                           <div className="w-full md:max-w-xs">
@@ -515,7 +529,12 @@ const CourseManagement = () => {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => generateLessonScript.mutate({ lessonId: lesson.id, minutes: isNaN(minutesNum) ? 3 : minutesNum })}
+                              onClick={() =>
+                                generateLessonScript.mutate({
+                                  lessonId: lesson.id,
+                                  minutes: isNaN(minutesNum) ? 3 : minutesNum,
+                                })
+                              }
                               disabled={isGenScriptPending}
                             >
                               {isGenScriptPending ? (
@@ -532,7 +551,12 @@ const CourseManagement = () => {
                             </Button>
                             <Button
                               size="sm"
-                              onClick={() => generateLessonVideo.mutate({ lessonId: lesson.id, minutes: isNaN(minutesNum) ? 3 : minutesNum })}
+                              onClick={() =>
+                                generateLessonVideo.mutate({
+                                  lessonId: lesson.id,
+                                  minutes: isNaN(minutesNum) ? 3 : minutesNum,
+                                })
+                              }
                               disabled={isGenVideoPending}
                             >
                               {isGenVideoPending ? (
@@ -550,13 +574,15 @@ const CourseManagement = () => {
                           </div>
                         </div>
 
-                        {/* Optional: show local script draft if available */}
+                        {/* Optional: script preview */}
                         {scriptDrafts[lesson.id] && (
                           <div className="mt-3">
                             <Label>Draft Script (preview)</Label>
                             <Textarea
                               value={scriptDrafts[lesson.id]}
-                              onChange={(e) => setScriptDrafts(prev => ({ ...prev, [lesson.id]: e.target.value }))}
+                              onChange={(e) =>
+                                setScriptDrafts((prev) => ({ ...prev, [lesson.id]: e.target.value }))
+                              }
                               rows={8}
                             />
                             <div className="mt-2 flex gap-2">
@@ -571,9 +597,13 @@ const CourseManagement = () => {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => setScriptDrafts(prev => {
-                                  const next = { ...prev }; delete next[lesson.id]; return next;
-                                })}
+                                onClick={() =>
+                                  setScriptDrafts((prev) => {
+                                    const next = { ...prev };
+                                    delete next[lesson.id];
+                                    return next;
+                                  })
+                                }
                               >
                                 <Trash className="w-4 h-4 mr-2" />
                                 Clear Preview
@@ -582,41 +612,41 @@ const CourseManagement = () => {
                           </div>
                         )}
                       </div>
-                    
+
                       {editingLesson === lesson.id ? (
                         <div className="space-y-4">
                           <div>
-                            <Label htmlFor="lesson-title">Lesson Title</Label>
+                            <Label htmlFor={`lesson-title-${lesson.id}`}>Lesson Title</Label>
                             <Input
-                              id="lesson-title"
+                              id={`lesson-title-${lesson.id}`}
                               value={lessonTitle}
                               onChange={(e) => setLessonTitle(e.target.value)}
                             />
                           </div>
                           <div>
                             <div className="flex items-center justify-between mb-2">
-                              <Label htmlFor="lesson-content">Lesson Content</Label>
+                              <Label htmlFor={`lesson-content-${lesson.id}`}>Lesson Content</Label>
                               <div className="flex gap-2">
                                 <input
                                   type="file"
                                   accept="image/*"
-                                  onChange={handleImageUpload}
+                                  onChange={handleImageUpload(lesson.id)}
                                   className="hidden"
-                                  id="image-upload"
+                                  id={`image-upload-${lesson.id}`}
                                 />
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => document.getElementById('image-upload')?.click()}
+                                  onClick={() => document.getElementById(`image-upload-${lesson.id}`)?.click()}
                                   disabled={uploadingImage}
                                 >
                                   <Upload className="w-4 h-4 mr-1" />
-                                  {uploadingImage ? 'Uploading...' : 'Add Image'}
+                                  {uploadingImage ? "Uploading..." : "Add Image"}
                                 </Button>
                               </div>
                             </div>
                             <Textarea
-                              id="lesson-content"
+                              id={`lesson-content-${lesson.id}`}
                               value={lessonContent}
                               onChange={(e) => setLessonContent(e.target.value)}
                               rows={10}
