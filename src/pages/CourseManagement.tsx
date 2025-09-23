@@ -248,74 +248,87 @@ const CourseManagement = () => {
   });
 
   // NEW: Generate & Insert Video (per lesson) – non-blocking (returns 202)
-  const generateLessonVideo = useMutation({
-    mutationFn: async ({
-      lessonId,
-      minutes,
-      forceRegenerate = false,
-    }: {
-      lessonId: string;
-      minutes: number;
-      forceRegenerate?: boolean;
-    }) => {
-      const inlineScript = scriptDrafts[lessonId]; // or scriptDrafts[lesson.id] at call site
-      const { data, error } = await supabase.functions.invoke("generate-lesson-video", {
-        body: {
-          lessonId,
-          targetDurationMinutes: minutes,
-          forceRegenerate,
-          ...(inlineScript ? { script: inlineScript } : {}), // only include if present
-        },
-      });
-      if (error) {
-          // Supabase Functions error often includes a message; sometimes a nested context
-          let err = error.context.response.json()
-          const msg =
-            err?.message ||
-            err?.error?.message ||
-            err?.context?.error ||
-            "Failed to generate video. Please try again.";
+const generateLessonVideo = useMutation({
+  mutationFn: async ({
+    lessonId,
+    minutes,
+    forceRegenerate = false,
+  }: {
+    lessonId: string;
+    minutes: number;
+    forceRegenerate?: boolean;
+  }) => {
+    const inlineScript = scriptDrafts[lessonId]; // use preview if present
 
-          console.error("generate-lesson-video error:", err);
-          toast({
-            title: "Video generation error",
-            description: msg,
-            variant: "destructive",
-          }
-        );
-      };
+    const { data, error } = await supabase.functions.invoke("generate-lesson-video", {
+      body: {
+        lessonId,
+        targetDurationMinutes: minutes,
+        dryRun:true,
+        forceRegenerate,
+        ...(inlineScript ? { script: inlineScript } : {}), // only include if present
+      },
+    });
+
+    if (error) {
+      // Robust parsing of error body (if any)
+      let msg = "Failed to generate video. Please try again.";
+      try {
+        const res = error.context?.response;        // may be undefined for network errors
+        if (res) {
+          // response body may be JSON or empty
+          const detail = await res.clone().json().catch(() => null);
+          msg =
+            detail?.details ||
+            detail?.error ||
+            detail?.message ||
+            error.message ||
+            msg;
+        } else {
+          msg = error.message || msg;
+        }
+      } catch {
+        msg = error.message || msg;
+      }
+
+      // Surface to UI and abort the mutation
+      throw new Error(msg);
+    }
+
+    // Happy path
+    return data as {
+      accepted: boolean;
+      status: "processing" | "reused" | "skipped";
+      lessonVideoId?: string;
+      providerVideoId?: string;
+    };
+  },
+
+  onSuccess: (data) => {
+    const status = data?.status ?? "processing";
+    let description = "Video job accepted.";
+    if (status === "reused") description = "Reusing an existing in-flight job.";
+    if (status === "skipped") description = "Skipped (existing canonical video).";
+
+    toast({ title: "Generate Video", description });
+    // Kick a sweep to catch fast completions
+    refreshCourseVideos.mutate();
+    queryClient.invalidateQueries({ queryKey: ["modules", courseId] });
+  },
+
+  onError: (err: any) => {
+    // err is the Error we threw above
+    const description = typeof err?.message === "string" ? err.message : "Failed to generate video.";
+    console.error("generate-lesson-video error:", err);
+    toast({
+      title: "Video generation error",
+      description,
+      variant: "destructive",
+    });
+  },
+});
+
  
-      
-      return data as {
-        accepted: boolean;
-        status: "processing" | "reused" | "skipped";
-        lessonVideoId?: string;
-        providerVideoId?: string;
-      };
-    },
-    onSuccess: (data) => {
-      const status = data?.status ?? "processing";
-      let description = "Video job accepted.";
-      if (status === "reused") description = "Reusing an existing in-flight job.";
-      if (status === "skipped") description = "Skipped (existing canonical video).";
-      toast({
-        title: "Generate Video",
-        description,
-      });
-      // Kick a background sweep to pick up any fast completions
-      refreshCourseVideos.mutate();
-      queryClient.invalidateQueries({ queryKey: ["modules", courseId] });
-    },
-    onError: (err: any) => {
-      console.error("generate-lesson-video error:", err);
-      toast({
-        title: "Error",
-        description: "Failed to generate video. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
   const handleEditLesson = (lesson: any) => {
     setEditingLesson(lesson.id);
     setLessonTitle(lesson.title);
