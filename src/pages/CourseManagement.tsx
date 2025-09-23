@@ -297,12 +297,12 @@ const generateLessonVideo = useMutation({
     forceRegenerate?: boolean;
   }) => {
   const inlineScript = scriptDrafts[lessonId]; // use preview if present
-
+  
   const { data, error } =  await supabase.functions.invoke("generate-lesson-video", {
     body: {
       lessonId,
       targetDurationMinutes: minutes,
-      dryRun: true,              // ensure dry-run
+      dryRun: false,              // we will only hit dummy-heygen emulator
       forceRegenerate: true,     // avoid reuse branch
       ...(scriptDrafts[lessonId] ? { script: scriptDrafts[lessonId] } : {}),
     },
