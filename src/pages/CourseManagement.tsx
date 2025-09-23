@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   ArrowLeft,
   Edit3,
@@ -36,7 +37,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-const DEFAULT_MINUTES = "3";
+const DEFAULT_MINUTES = "2";
+
+
 
 // Robust extraction of edge function error payloads
 async function explainEdgeError(error: any): Promise<string> {
@@ -343,6 +346,62 @@ const CourseManagement = () => {
       toast({ title: "Video generation error", description: String(err?.message ?? err), variant: "destructive" });
     },
   });
+
+
+
+type VideoPlayerProps = {
+  url: string;
+  title?: string;
+  captionsVttUrl?: string; // optional: Supabase public URL to .vtt
+};
+
+function InlineVideoPlayer({ url, title = "Lesson Video", captionsVttUrl }: VideoPlayerProps) {
+  const [open, setOpen] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const openInNewTab = () => window.open(url, "_blank", "noopener,noreferrer");
+
+  return (
+    <>
+      <div className="flex gap-2">
+        <Button size="sm" onClick={() => setOpen(true)}>Play inline</Button>
+        <Button size="sm" variant="outline" onClick={openInNewTab}>
+          Open in new tab
+        </Button>
+      </div>
+
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setFailed(false); }}>
+        <DialogContent className="sm:max-w-[900px]">
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+          </DialogHeader>
+
+          {!failed ? (
+            <video
+              key={open ? url : undefined} // unmount on close to stop playback
+              src={url}
+              controls
+              playsInline
+              preload="metadata"
+              className="w-full h-auto rounded-lg"
+              crossOrigin="anonymous" // needed if you later draw frames to canvas
+              onError={() => setFailed(true)}
+            >
+              {captionsVttUrl && (
+                <track kind="subtitles" srcLang="en" src={captionsVttUrl} label="English" default />
+              )}
+            </video>
+          ) : (
+            <div className="text-sm text-muted-foreground">
+              This video can’t be embedded by the provider.{" "}
+              <Button size="sm" variant="link" onClick={openInNewTab}>Open in a new tab instead.</Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
 
   const handleEditLesson = (lesson: any) => {
     setEditingLesson(lesson.id);
