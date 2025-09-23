@@ -36,6 +36,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+import { useMemo } from "react";
+
 const DEFAULT_MINUTES = "3";
 
 const CourseManagement = () => {
@@ -92,6 +94,40 @@ const CourseManagement = () => {
     },
     enabled: !!courseId,
   });
+
+
+
+
+// ...
+
+  const { data: activeJobs, isLoading: jobsLoading } = useQuery({
+    queryKey: ["activeVideoJobs", courseId, (modules ?? []).map(m => m.id)],
+    enabled: !!courseId && !!modules && modules.length > 0,
+    queryFn: async () => {
+      // collect all lesson ids in this course
+      const lessonIds = (modules ?? []).flatMap(m => m.lessons?.map((l: any) => l.id) ?? []);
+      if (lessonIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from("lesson_videos")
+        .select("id, lesson_id, video_status, video_id, created_at, target_duration_s")
+        .in("lesson_id", lessonIds)
+        .in("video_status", ["pending", "processing"])
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const activeByLesson = useMemo(() => {
+    const map = new Map<string, any[]>();
+    (activeJobs ?? []).forEach((row: any) => {
+      const arr = map.get(row.lesson_id) ?? [];
+      arr.push(row);
+      map.set(row.lesson_id, arr);
+    });
+    return map;
+  }, [activeJobs]);
+
 
   // Delete course (cascaded sequence)
   const deleteCourse = useMutation({
@@ -526,6 +562,34 @@ const generateLessonVideo = useMutation({
                           <Badge variant="secondary">Lesson {lessonIndex + 1}</Badge>
                           <span className="font-medium">{lesson.title}</span>
                         </div>
+                        {/* Active video jobs */}
+                        {(() => {
+                          const jobs = activeByLesson.get(lesson.id) ?? [];
+                          if (jobs.length === 0) return null;
+                          return (
+                            <div className="mt-2 rounded-md border border-border/60 p-2">
+                              <div className="text-sm font-medium">Active video jobs</div>
+                              <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                                {jobs.slice(0, 5).map((job: any) => (
+                                  <div key={job.id} className="flex items-center gap-2">
+                                    <code className="px-1.5 py-0.5 rounded bg-muted">
+                                      {job.video_id || "—"}
+                                    </code>
+                                    <span>{job.video_status}</span>
+                                    {typeof job.target_duration_s === "number" && (
+                                      <span>• {Math.round(job.target_duration_s / 60)} min</span>
+                                    )}
+                                    <span>• {new Date(job.created_at).toLocaleString()}</span>
+                                  </div>
+                                ))}
+                                {jobs.length > 5 && (
+                                  <div className="text-[11px] italic">(+{jobs.length - 5} more)</div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                         {editingLesson === lesson.id ? (
                           <div className="flex gap-2">
                             <Button size="sm" onClick={handleSaveLesson} disabled={updateLesson.isPending}>
