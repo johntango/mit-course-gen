@@ -402,7 +402,11 @@ function InlineVideoPlayer({ url, title = "Lesson Video", captionsVttUrl }: Vide
     </>
   );
 }
-
+  const firstImageUrl = (md?: string | null) => {
+    if (!md) return null;
+    const m = md.match(/!\[[^\]]*]\(([^)\s]+)(?:\s+"[^"]*")?\)/); // ![alt](url "title")
+    return m?.[1] ?? null;
+  };
   const handleEditLesson = (lesson: any) => {
     setEditingLesson(lesson.id);
     setLessonTitle(lesson.title);
@@ -585,277 +589,298 @@ function InlineVideoPlayer({ url, title = "Lesson Video", captionsVttUrl }: Vide
                 </CardTitle>
                 <CardDescription>{module.description}</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {module.lessons?.map((lesson: any, lessonIndex: number) => {
-                  const minutesStr = getMinutesForLesson(lesson.id);
-                  const minutesNum = parseFloat(minutesStr || DEFAULT_MINUTES);
-                  const isGenScriptPending =
-                    generateLessonScript.isPending &&
-                    (generateLessonScript.variables as any)?.lessonId === lesson.id;
-                  const isGenVideoPending =
-                    generateLessonVideo.isPending && (generateLessonVideo.variables as any)?.lessonId === lesson.id;
+           <CardContent className="space-y-4">
+            {module.lessons?.map((lesson: any, lessonIndex: number) => {
+              const minutesStr = getMinutesForLesson(lesson.id);
+              const minutesNum = parseFloat(minutesStr || DEFAULT_MINUTES);
 
-                  return (
-                    <div key={lesson.id} className="border border-border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary">Lesson {lessonIndex + 1}</Badge>
-                          <span className="font-medium">{lesson.title}</span>
+              const isGenScriptPending =
+                generateLessonScript.isPending &&
+                (generateLessonScript.variables as any)?.lessonId === lesson.id;
+
+              const isGenVideoPending =
+                generateLessonVideo.isPending &&
+                (generateLessonVideo.variables as any)?.lessonId === lesson.id;
+
+              // Active jobs for this lesson (latest first)
+              const jobs = activeByLesson.get(lesson.id) ?? [];
+
+              return (
+                <div key={lesson.id} className="border border-border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary">Lesson {lessonIndex + 1}</Badge>
+                      <span className="font-medium">{lesson.title}</span>
+                    </div>
+
+                    {/* Active video jobs */}
+                    {jobs.length > 0 && (
+                      <div className="mt-2 rounded-md border border-border/60 p-2">
+                        <div className="text-sm font-medium">Active video jobs</div>
+                        <div className="mt-1 space-y-1 text-xs text-muted-foreground">
+                          {jobs.slice(0, 5).map((job: any) => (
+                            <div key={job.id} className="flex items-center gap-2">
+                              <code className="px-1.5 py-0.5 rounded bg-muted">
+                                {displayVideoId(job.video_id)}
+                              </code>
+                              <span>{job.video_status}</span>
+                              {typeof job.target_duration_s === "number" && (
+                                <span>• {Math.round(job.target_duration_s / 60)} min</span>
+                              )}
+                              <span>• {new Date(job.created_at).toLocaleString()}</span>
+                            </div>
+                          ))}
+                          {jobs.length > 5 && (
+                            <div className="text-[11px] italic">(+{jobs.length - 5} more)</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {editingLesson === lesson.id ? (
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={handleSaveLesson} disabled={updateLesson.isPending}>
+                          <Save className="w-4 h-4 mr-1" />
+                          Save
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditingLesson(null)}>
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button size="sm" variant="ghost" onClick={() => handleEditLesson(lesson)}>
+                        <Edit3 className="w-4 h-4 mr-1" />
+                        Edit
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* VIDEO TOOLS */}
+                  <div className="rounded-md border border-border/60 p-3 mb-3">
+                    <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+                      <div className="w-full md:max-w-xs">
+                        <Label htmlFor={`minutes-${lesson.id}`}>Target length (minutes)</Label>
+                        <Input
+                          id={`minutes-${lesson.id}`}
+                          type="number"
+                          step="0.5"
+                          min="0.5"
+                          value={minutesStr}
+                          onChange={(e) => setMinutesForLesson(lesson.id, e.target.value)}
+                          placeholder={DEFAULT_MINUTES}
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Decimals allowed, e.g., <code>1.5</code> for ~90 seconds.
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            generateLessonScript.mutate({
+                              lessonId: lesson.id,
+                              minutes: isNaN(minutesNum) ? 3 : minutesNum,
+                            })
+                          }
+                          disabled={isGenScriptPending}
+                        >
+                          {isGenScriptPending ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Generating Script...
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="w-4 h-4 mr-2" />
+                              Generate Script
+                            </>
+                          )}
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          onClick={() =>
+                            generateLessonVideo.mutate({
+                              lessonId: lesson.id,
+                              minutes: isNaN(minutesNum) ? 3 : minutesNum,
+                            })
+                          }
+                          disabled={isGenVideoPending}
+                        >
+                          {isGenVideoPending ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Generating Video...
+                            </>
+                          ) : (
+                            <>
+                              <Clapperboard className="w-4 h-4 mr-2" />
+                              Generate & Insert Video
+                            </>
+                          )}
+                        </Button>
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => refreshCourseVideos.mutate()}
+                          disabled={refreshCourseVideos.isPending}
+                        >
+                          {refreshCourseVideos.isPending ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Checking…
+                            </>
+                          ) : (
+                            "Check Status"
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Optional: script preview */}
+                    {scriptDrafts[lesson.id] && (
+                      <div className="mt-3">
+                        <Label>Draft Script (preview)</Label>
+                        <Textarea
+                          value={scriptDrafts[lesson.id]}
+                          onChange={(e) => setScriptDrafts((prev) => ({ ...prev, [lesson.id]: e.target.value }))}
+                          rows={8}
+                        />
+                        <div className="mt-2 flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => copyToClipboard(scriptDrafts[lesson.id])}
+                          >
+                            <Copy className="w-4 h-4 mr-2" />
+                            Copy
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              setScriptDrafts((prev) => {
+                                const next = { ...prev };
+                                delete next[lesson.id];
+                                return next;
+                              })
+                            }
+                          >
+                            <Trash className="w-4 h-4 mr-2" />
+                            Clear Preview
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* LESSON CONTENT + STATUS/URL */}
+                  {editingLesson === lesson.id ? (
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor={`lesson-title-${lesson.id}`}>Lesson Title</Label>
+                        <Input
+                          id={`lesson-title-${lesson.id}`}
+                          value={lessonTitle}
+                          onChange={(e) => setLessonTitle(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <Label htmlFor={`lesson-content-${lesson.id}`}>Lesson Content</Label>
+                          <div className="flex gap-2">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleImageUpload(lesson.id)}
+                              className="hidden"
+                              id={`image-upload-${lesson.id}`}
+                            />
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => document.getElementById(`image-upload-${lesson.id}`)?.click()}
+                              disabled={uploadingImage}
+                            >
+                              <Upload className="w-4 h-4 mr-1" />
+                              {uploadingImage ? "Uploading..." : "Add Image"}
+                            </Button>
+                          </div>
                         </div>
 
-                        {/* Active video jobs */}
-                        {(() => {
-                          const jobs = activeByLesson.get(lesson.id) ?? [];
-                          if (jobs.length === 0) return null;
-                          return (
-                            <div className="mt-2 rounded-md border border-border/60 p-2">
-                              <div className="text-sm font-medium">Active video jobs</div>
-                              <div className="mt-1 space-y-1 text-xs text-muted-foreground">
-                                {jobs.slice(0, 5).map((job: any) => (
-                                  <div key={job.id} className="flex items-center gap-2">
-                                    <code className="px-1.5 py-0.5 rounded bg-muted">
-                                      {displayVideoId(job.video_id)}
-                                    </code>
-                                    <span>{job.video_status}</span>
-                                    {typeof job.target_duration_s === "number" && (
-                                      <span>• {Math.round(job.target_duration_s / 60)} min</span>
-                                    )}
-                                    <span>• {new Date(job.created_at).toLocaleString()}</span>
-                                  </div>
-                                ))}
-                                {jobs.length > 5 && (
-                                  <div className="text-[11px] italic">(+{jobs.length - 5} more)</div>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })()}
-
-                        {editingLesson === lesson.id ? (
-                          <div className="flex gap-2">
-                            <Button size="sm" onClick={handleSaveLesson} disabled={updateLesson.isPending}>
-                              <Save className="w-4 h-4 mr-1" />
-                              Save
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => setEditingLesson(null)}>
-                              <X className="w-4 h-4" />
-                            </Button>
+                        <Textarea
+                          id={`lesson-content-${lesson.id}`}
+                          value={lessonContent}
+                          onChange={(e) => setLessonContent(e.target.value)}
+                          rows={10}
+                          placeholder="Enter lesson content (supports Markdown)..."
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Text excerpt */}
+                      <div className="text-muted-foreground">
+                        {lesson.content ? (
+                          <div className="prose max-w-none">
+                            {lesson.content.substring(0, 200)}
+                            {lesson.content.length > 200 && "..."}
                           </div>
                         ) : (
-                          <Button size="sm" variant="ghost" onClick={() => handleEditLesson(lesson)}>
-                            <Edit3 className="w-4 h-4 mr-1" />
-                            Edit
-                          </Button>
+                          <em>No content yet</em>
                         )}
                       </div>
 
-                      {/* VIDEO TOOLS */}
-                      <div className="rounded-md border border-border/60 p-3 mb-3">
-                        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-                          <div className="w-full md:max-w-xs">
-                            <Label htmlFor={`minutes-${lesson.id}`}>Target length (minutes)</Label>
-                            <Input
-                              id={`minutes-${lesson.id}`}
-                              type="number"
-                              step="0.5"
-                              min="0.5"
-                              value={minutesStr}
-                              onChange={(e) => setMinutesForLesson(lesson.id, e.target.value)}
-                              placeholder={DEFAULT_MINUTES}
+                      {/* Hero image */}
+                      {(() => {
+                        const hero = firstImageUrl(lesson.content);
+                        if (!hero) return null;
+                        return (
+                          <div className="my-3">
+                            <img
+                              src={hero}
+                              alt={`${lesson.title} illustration`}
+                              className="w-full h-auto rounded-md border border-border/50"
+                              loading="lazy"
                             />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Decimals allowed, e.g., <code>1.5</code> for ~90 seconds.
-                            </p>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                generateLessonScript.mutate({
-                                  lessonId: lesson.id,
-                                  minutes: isNaN(minutesNum) ? 3 : minutesNum,
-                                })
-                              }
-                              disabled={isGenScriptPending}
-                            >
-                              {isGenScriptPending ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                  Generating Script...
-                                </>
-                              ) : (
-                                <>
-                                  <FileText className="w-4 h-4 mr-2" />
-                                  Generate Script
-                                </>
-                              )}
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() =>
-                                generateLessonVideo.mutate({
-                                  lessonId: lesson.id,
-                                  minutes: isNaN(minutesNum) ? 3 : minutesNum,
-                                })
-                              }
-                              disabled={isGenVideoPending}
-                            >
-                              {isGenVideoPending ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                  Generating Video...
-                                </>
-                              ) : (
-                                <>
-                                  <Clapperboard className="w-4 h-4 mr-2" />
-                                  Generate & Insert Video
-                                </>
-                              )}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => refreshCourseVideos.mutate()}
-                              disabled={refreshCourseVideos.isPending}
-                            >
-                              {refreshCourseVideos.isPending ? (
-                                <>
-                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                  Checking…
-                                </>
-                              ) : (
-                                "Check Status"
-                              )}
-                            </Button>
-                          </div>
-                        </div>
+                        );
+                      })()}
 
-                        {/* Optional: script preview */}
-                        {scriptDrafts[lesson.id] && (
-                          <div className="mt-3">
-                            <Label>Draft Script (preview)</Label>
-                            <Textarea
-                              value={scriptDrafts[lesson.id]}
-                              onChange={(e) =>
-                                setScriptDrafts((prev) => ({ ...prev, [lesson.id]: e.target.value }))
-                              }
-                              rows={8}
+                      {/* Video block — directly under the image */}
+                      <div className="mt-2">
+                        {completedByLesson[lesson.id]?.video_url ? (
+                          <div className="flex items-center gap-3">
+                            <Badge variant="default">Video ready</Badge>
+
+                            {/* If you don't have InlineVideoPlayer, replace with a plain <video> block */}
+                            <InlineVideoPlayer
+                              url={completedByLesson[lesson.id].video_url}
+                              title={lesson.title}
                             />
-                            <div className="mt-2 flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => copyToClipboard(scriptDrafts[lesson.id])}
-                              >
-                                <Copy className="w-4 h-4 mr-2" />
-                                Copy
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() =>
-                                  setScriptDrafts((prev) => {
-                                    const next = { ...prev };
-                                    delete next[lesson.id];
-                                    return next;
-                                  })
-                                }
-                              >
-                                <Trash className="w-4 h-4 mr-2" />
-                                Clear Preview
-                              </Button>
-                            </div>
                           </div>
+                        ) : jobs.length > 0 ? (
+                          <div className="flex items-center gap-2 text-sm">
+                            <Badge variant="secondary">Rendering…</Badge>
+                            <code className="px-1.5 py-0.5 rounded bg-muted">
+                              {displayVideoId(jobs[0]?.video_id)}
+                            </code>
+                          </div>
+                        ) : (
+                          <em className="text-sm">No completed video yet</em>
                         )}
                       </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </CardContent>
 
-                      {/* LESSON CONTENT + STATUS/URL */}
-                      {editingLesson === lesson.id ? (
-                        <div className="space-y-4">
-                          <div>
-                            <Label htmlFor={`lesson-title-${lesson.id}`}>Lesson Title</Label>
-                            <Input
-                              id={`lesson-title-${lesson.id}`}
-                              value={lessonTitle}
-                              onChange={(e) => setLessonTitle(e.target.value)}
-                            />
-                          </div>
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <Label htmlFor={`lesson-content-${lesson.id}`}>Lesson Content</Label>
-                              <div className="flex gap-2">
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={handleImageUpload(lesson.id)}
-                                  className="hidden"
-                                  id={`image-upload-${lesson.id}`}
-                                />
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => document.getElementById(`image-upload-${lesson.id}`)?.click()}
-                                  disabled={uploadingImage}
-                                >
-                                  <Upload className="w-4 h-4 mr-1" />
-                                  {uploadingImage ? "Uploading..." : "Add Image"}
-                                </Button>
-                              </div>
-                            </div>
-                            <Textarea
-                              id={`lesson-content-${lesson.id}`}
-                              value={lessonContent}
-                              onChange={(e) => setLessonContent(e.target.value)}
-                              rows={10}
-                              placeholder="Enter lesson content (supports Markdown)..."
-                            />
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="text-muted-foreground">
-                            {lesson.content ? (
-                              <div className="prose max-w-none">
-                                {lesson.content.substring(0, 200)}
-                                {lesson.content.length > 200 && "..."}
-                              </div>
-                            ) : (
-                              <em>No content yet</em>
-                            )}
-                          </div>
-
-                          {/* Video status / URL */}
-                          <div className="mt-2 text-sm">
-                            {completedByLesson[lesson.id]?.video_url ? (
-                              <div className="flex items-center gap-2">
-                                <Badge variant="default">Video ready</Badge>
-                                <a
-                                  href={completedByLesson[lesson.id].video_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="underline"
-                                >
-                                  Open video
-                                </a>
-                              </div>
-                            ) : activeByLesson.get(lesson.id) ? (
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary">Rendering…</Badge>
-                                <code className="px-1.5 py-0.5 rounded bg-muted">
-                                  {displayVideoId((activeByLesson.get(lesson.id) ?? [])[0]?.video_id)}
-                                </code>
-                              </div>
-                            ) : (
-                              <em>No completed video yet</em>
-                            )}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </CardContent>
             </Card>
           ))}
         </div>
