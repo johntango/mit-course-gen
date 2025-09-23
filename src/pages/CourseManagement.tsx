@@ -350,6 +350,7 @@ const generateLessonVideo = useMutation({
     // Kick a sweep to catch fast completions
     refreshCourseVideos.mutate();
     queryClient.invalidateQueries({ queryKey: ["modules", courseId] });
+    queryClient.invalidateQueries({ queryKey: ["activeVideoJobs", courseId] });
   },
 
   onError: (err: any) => {
