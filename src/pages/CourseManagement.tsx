@@ -220,6 +220,8 @@ const CourseManagement = () => {
     },
   });
 
+
+  
   // NEW: Sweeper to finalize long-running HeyGen renders
   const refreshCourseVideos = useMutation({
     mutationFn: async () => {
@@ -294,17 +296,18 @@ const generateLessonVideo = useMutation({
     minutes: number;
     forceRegenerate?: boolean;
   }) => {
-    const inlineScript = scriptDrafts[lessonId]; // use preview if present
+  const inlineScript = scriptDrafts[lessonId]; // use preview if present
 
-    const { data, error } = await supabase.functions.invoke("generate-lesson-video", {
-      body: {
-        lessonId,
-        targetDurationMinutes: minutes,
-        dryRun:true,
-        forceRegenerate,
-        ...(inlineScript ? { script: inlineScript } : {}), // only include if present
-      },
-    });
+  const { data, error } =  await supabase.functions.invoke("generate-lesson-video", {
+    body: {
+      lessonId,
+      targetDurationMinutes: minutes,
+      dryRun: true,              // ensure dry-run
+      forceRegenerate: true,     // avoid reuse branch
+      ...(scriptDrafts[lessonId] ? { script: scriptDrafts[lessonId] } : {}),
+    },
+  });
+    
 
     if (error) {
       // Robust parsing of error body (if any)
@@ -381,6 +384,8 @@ const generateLessonVideo = useMutation({
       });
     }
   };
+  const displayVideoId = (vid?: string | null) =>
+  vid && vid.startsWith("dryRun_") ? "dryRun" : (vid || "—");
 
   const handleImageUpload =
     (lessonIdForInput?: string) => async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -574,8 +579,8 @@ const generateLessonVideo = useMutation({
                                 {jobs.slice(0, 5).map((job: any) => (
                                   <div key={job.id} className="flex items-center gap-2">
                                     <code className="px-1.5 py-0.5 rounded bg-muted">
-                                      {job.video_id || "—"}
-                                    </code>
+                                      {displayVideoId(job.video_id)}
+                                    </code>                                
                                     <span>{job.video_status}</span>
                                     {typeof job.target_duration_s === "number" && (
                                       <span>• {Math.round(job.target_duration_s / 60)} min</span>
