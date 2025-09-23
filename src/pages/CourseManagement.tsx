@@ -228,7 +228,7 @@ const CourseManagement = () => {
   const generateLessonScript = useMutation({
     mutationFn: async ({ lessonId, minutes }: { lessonId: string; minutes: number }) => {
       const { data, error } = await supabase.functions.invoke("generate-lesson-script", {
-        body: { lessonId, targetDurationMinutes: minutes },
+        body: { lessonId, targetDurationMinutes: minutes, persistDraft: true},
       });
       if (error) throw error;
       return data as { script: string };
@@ -258,10 +258,34 @@ const CourseManagement = () => {
       minutes: number;
       forceRegenerate?: boolean;
     }) => {
+      const inlineScript = scriptDrafts[lessonId]; // or scriptDrafts[lesson.id] at call site
       const { data, error } = await supabase.functions.invoke("generate-lesson-video", {
-        body: { lessonId, targetDurationMinutes: minutes, forceRegenerate },
+        body: {
+          lessonId,
+          targetDurationMinutes: minutes,
+          forceRegenerate,
+          ...(inlineScript ? { script: inlineScript } : {}), // only include if present
+        },
       });
-      if (error) throw error;
+      if (error) {
+          // Supabase Functions error often includes a message; sometimes a nested context
+          let err = error.context.response.json()
+          const msg =
+            err?.message ||
+            err?.error?.message ||
+            err?.context?.error ||
+            "Failed to generate video. Please try again.";
+
+          console.error("generate-lesson-video error:", err);
+          toast({
+            title: "Video generation error",
+            description: msg,
+            variant: "destructive",
+          }
+        );
+      };
+ 
+      
       return data as {
         accepted: boolean;
         status: "processing" | "reused" | "skipped";
