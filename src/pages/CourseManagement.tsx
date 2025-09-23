@@ -97,6 +97,39 @@ const CourseManagement = () => {
 
 
 
+  const lessonIds = useMemo(() => {
+    if (!modules) return [];
+    return modules.flatMap((m: any) => m.lessons?.map((l: any) => l.id) ?? []);
+  }, [modules]);
+
+  const { data: completedRows, isLoading: completedLoading } = useQuery({
+  queryKey: ["completedLessonVideos", courseId, lessonIds.join(",")],
+  enabled: !!courseId && lessonIds.length > 0,
+  refetchInterval: 4000, // auto-refresh UI every 4s
+  queryFn: async () => {
+    const { data, error } = await supabase
+      .from("lesson_videos")
+      .select("id, lesson_id, video_status, video_url, created_at")
+      .in("lesson_id", lessonIds)
+      .eq("video_status", "completed")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return data ?? [];
+  },
+});
+
+// Map to latest completed per lesson
+const completedByLesson: Record<string, { id: string; video_url: string }> = useMemo(() => {
+  const map: Record<string, { id: string; video_url: string }> = {};
+  (completedRows ?? []).forEach((row: any) => {
+    // first row encountered per lesson_id is the newest because of DESC order
+    if (!map[row.lesson_id] && row.video_url) {
+      map[row.lesson_id] = { id: row.id, video_url: row.video_url };
+    }
+  });
+  return map;
+}, [completedRows]);
 
 // ...
 
@@ -717,6 +750,37 @@ const generateLessonVideo = useMutation({
                               </Button>
                             </div>
                           </div>
+                        )}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {lesson.content ? (
+                          <div className="prose max-w-none">
+                            {lesson.content.substring(0, 200)}
+                            {lesson.content.length > 200 && "..."}
+                          </div>
+                        ) : (
+                          <em>No content yet</em>
+                        )}
+                      </div>
+
+                      {/* NEW: Video status / URL */}
+                      <div className="mt-2 text-sm">
+                        {completedByLesson[lesson.id]?.video_url ? (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="default">Video ready</Badge>
+                            <a
+                              href={completedByLesson[lesson.id].video_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="underline"
+                            >
+                              Open video
+                            </a>
+                          </div>
+                        ) : (
+                          // Optionally show “rendering” if you already have activeJobs map
+                          // Otherwise remove this branch.
+                          <em>No completed video yet</em>
                         )}
                       </div>
 
