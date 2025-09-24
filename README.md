@@ -1,7 +1,13 @@
-# Welcome to your Lovable project
+# Welcome to the Course Generation Application
+
+HEYGEN_BASE_URL = For Debug - set this to point to dummy-heygen edge function
+For production either delete this (the default is HeyGen API) or set it to point to the HeyGen API https://api.heygen.com
+
+HEYGEN_DRY_RUN = true or false
 
 ## Project info
-Secrets need to be stored in Supabase 
+
+Secrets need to be stored in Supabase
 
 **URL**: https://lovable.dev/projects/5fedb6cc-9d1a-4069-a54b-175c2ee82bde
 
