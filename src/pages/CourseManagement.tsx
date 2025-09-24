@@ -483,7 +483,43 @@ function InlineVideoPlayer({ url, title = "Lesson Video", captionsVttUrl }: Vide
       toast({ title: "Copy failed", description: "Could not copy to clipboard.", variant: "destructive" });
     }
   };
+  // purge only dry-run rows (safe)
+  const purgeDryRun = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("cleanup-lesson-videos", {
+        body: { onlyDryRun: true },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (d: any) => {
+      toast({ title: "Purged dry-run videos", description: `${d.deleted} row(s) deleted.` });
+      queryClient.invalidateQueries({ queryKey: ["activeVideoJobs", courseId] });
+      queryClient.invalidateQueries({ queryKey: ["completedLessonVideos", courseId] });
+    },
+    onError: (e: any) => {
+      toast({ title: "Purge failed", description: String(e?.message ?? e), variant: "destructive" });
+    },
+  });
 
+  // purge all videos for this course
+  const purgeCourseVideos = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("cleanup-lesson-videos", {
+        body: { courseId },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (d: any) => {
+      toast({ title: "Purged course videos", description: `${d.deleted} row(s) deleted.` });
+      queryClient.invalidateQueries({ queryKey: ["activeVideoJobs", courseId] });
+      queryClient.invalidateQueries({ queryKey: ["completedLessonVideos", courseId] });
+    },
+    onError: (e: any) => {
+      toast({ title: "Purge failed", description: String(e?.message ?? e), variant: "destructive" });
+    },
+  });
   const displayVideoId = (vid?: string | null) => (vid && /^dryRun(_|$)/.test(vid) ? "dryRun" : vid || "—");
 
   if (courseLoading || modulesLoading) {
@@ -544,9 +580,29 @@ function InlineVideoPlayer({ url, title = "Lesson Video", captionsVttUrl }: Vide
                     "Check Video Status"
                   )}
                 </Button>
+                 <Button variant="outline" onClick={() => purgeDryRun.mutate()}>
+                  Purge Dry-Run
+                </Button>
+
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive">Purge Course Videos</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete all lesson videos for this course?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will remove all rows in <code>lesson_videos</code> for this course. This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => purgeCourseVideos.mutate()}>Confirm</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </>
             )}
-
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive">
