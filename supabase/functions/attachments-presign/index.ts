@@ -1,11 +1,21 @@
 import { createHash } from "node:crypto";
-import process from "node:process";
 import { S3Client, PutObjectCommand } from "npm:@aws-sdk/client-s3@3.336.0";
+import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner@3.336.0";
 
-const REGION = Deno.env.get("AWS_REGION") || process.env.AWS_REGION || "us-east-1";
-const BUCKET = Deno.env.get("S3_BUCKET") || process.env.S3_BUCKET;
-const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || process.env.SUPABASE_SERVICE_ROLE_KEY;
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const REGION = Deno.env.get("S3FS_REGION") || Deno.env.get("AWS_REGION") || "us-east-1";
+const BUCKET = Deno.env.get("S3_BUCKET");
+const ACCESS_KEY = Deno.env.get("S3FS_ACCESS_KEY_ID");
+const SECRET_KEY = Deno.env.get("S3FS_SECRET_ACCESS_KEY");
+const ENDPOINT_URL = Deno.env.get("S3FS_ENDPOINT_URL");
+
 if (!BUCKET) throw new Error("S3_BUCKET is required");
+if (!ACCESS_KEY) throw new Error("S3FS_ACCESS_KEY_ID is required");
+if (!SECRET_KEY) throw new Error("S3FS_SECRET_ACCESS_KEY is required");
 
 interface PresignRequest {
   lesson_id: string;
@@ -21,29 +31,64 @@ function randomHex(n: number) {
 }
 
 Deno.serve(async (req: Request) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
-    if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+    if (req.method !== "POST") {
+      return new Response("Method Not Allowed", { 
+        status: 405, 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
+    }
 
     const body = await req.json() as PresignRequest;
-    if (!body.lesson_id || !body.filename) return new Response("lesson_id and filename required", { status: 400 });
+    if (!body.lesson_id || !body.filename) {
+      return new Response(
+        JSON.stringify({ error: "lesson_id and filename required" }), 
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    // Minimal auth check: expect supabase service role in header (you should integrate real auth)
-    const auth = req.headers.get("authorization");
-    if (!auth || !auth.includes("Bearer")) return new Response("Unauthorized", { status: 401 });
+    console.log(`Generating presigned URL for lesson ${body.lesson_id}, file: ${body.filename}`);
 
     const key = `lessons/${body.lesson_id}/${Date.now()}-${randomHex(8)}-${body.filename}`;
     const mime = body.mime_type || "application/octet-stream";
 
-    // Generate presigned PUT URL using AWS SDK v3 presign (use @aws-sdk/s3-request-presigner if needed)
-    // We'll produce a simple signed URL via S3Client (requires aws credentials in env)
-    const client = new S3Client({ region: REGION });
-    // For portability, return the storage path and a signed URL placeholder; client can use your backend to sign.
-    // If you prefer full server-side presign, add @aws-sdk/s3-request-presigner and implement getSignedUrl.
-    const expiresIn = 60 * 15; // 15 min
+    // Configure S3 client with credentials
+    const s3Config: any = {
+      region: REGION,
+      credentials: {
+        accessKeyId: ACCESS_KEY,
+        secretAccessKey: SECRET_KEY,
+      },
+    };
 
-    // Note: Deno runtime may not have AWS creds via process.env; ensure env set.
+    // Add custom endpoint if provided (for S3-compatible services)
+    if (ENDPOINT_URL) {
+      s3Config.endpoint = ENDPOINT_URL;
+      s3Config.forcePathStyle = true;
+    }
+
+    const client = new S3Client(s3Config);
+    
+    // Create the PUT command
+    const command = new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: key,
+      ContentType: mime,
+    });
+
+    // Generate presigned URL (expires in 15 minutes)
+    const expiresIn = 60 * 15;
+    const signedUrl = await getSignedUrl(client, command, { expiresIn });
+
+    console.log(`Generated presigned URL for path: ${key}`);
+
     const presignPayload = {
-      upload_url: `https://${BUCKET}.s3.${REGION}.amazonaws.com/${encodeURIComponent(key)}`,
+      upload_url: signedUrl,
       storage_bucket: BUCKET,
       storage_path: key,
       expires_at: new Date(Date.now() + expiresIn * 1000).toISOString(),
@@ -53,10 +98,13 @@ Deno.serve(async (req: Request) => {
 
     return new Response(JSON.stringify(presignPayload), {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error(err);
-    return new Response(JSON.stringify({ error: String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
+    console.error("Error generating presigned URL:", err);
+    return new Response(
+      JSON.stringify({ error: String(err) }), 
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 });

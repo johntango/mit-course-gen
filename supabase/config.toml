@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.course-writer-agent] 
 verify_jwt = false
+
+[functions.attachments-presign]
+verify_jwt = false
