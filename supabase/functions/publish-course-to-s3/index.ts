@@ -1,5 +1,4 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { AwsClient } from "https://esm.sh/aws4fetch@1.0.18";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,11 +18,106 @@ interface PublishRequest {
   course_id: string;
 }
 
+// Manual AWS Signature V4 implementation (no filesystem dependencies)
+async function signS3PutRequest(
+  bucket: string,
+  key: string,
+  body: string,
+  region: string,
+  accessKey: string,
+  secretKey: string,
+  endpoint?: string
+): Promise<{ url: string; headers: Record<string, string> }> {
+  const encoder = new TextEncoder();
+  const now = new Date();
+  const dateStamp = now.toISOString().slice(0, 10).replace(/-/g, '');
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
+  
+  const host = endpoint 
+    ? new URL(endpoint).host
+    : `${bucket}.s3.${region}.amazonaws.com`;
+  
+  const url = endpoint
+    ? `${endpoint}/${bucket}/${key}`
+    : `https://${host}/${key}`;
+
+  // Hash the payload
+  const payloadHash = Array.from(
+    new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(body)))
+  ).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  // Create canonical request
+  const canonicalHeaders = `host:${host}\nx-amz-content-sha256:${payloadHash}\nx-amz-date:${amzDate}\n`;
+  const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
+  const canonicalRequest = [
+    'PUT',
+    `/${key}`,
+    '',
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash
+  ].join('\n');
+
+  // Create string to sign
+  const credentialScope = `${dateStamp}/${region}/s3/aws4_request`;
+  const canonicalRequestHash = Array.from(
+    new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(canonicalRequest)))
+  ).map(b => b.toString(16).padStart(2, '0')).join('');
+  
+  const stringToSign = [
+    'AWS4-HMAC-SHA256',
+    amzDate,
+    credentialScope,
+    canonicalRequestHash
+  ].join('\n');
+
+  // Calculate signature
+  const getSignatureKey = async (key: string, dateStamp: string, regionName: string, serviceName: string) => {
+    const kDate = await hmac(`AWS4${key}`, dateStamp);
+    const kRegion = await hmac(kDate, regionName);
+    const kService = await hmac(kRegion, serviceName);
+    const kSigning = await hmac(kService, 'aws4_request');
+    return kSigning;
+  };
+
+  const hmac = async (key: ArrayBuffer | string, data: string): Promise<ArrayBuffer> => {
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      typeof key === 'string' ? encoder.encode(key) : key,
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    return await crypto.subtle.sign('HMAC', cryptoKey, encoder.encode(data));
+  };
+
+  const signingKey = await getSignatureKey(secretKey, dateStamp, region, 's3');
+  const signature = Array.from(
+    new Uint8Array(await hmac(signingKey, stringToSign))
+  ).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  // Build authorization header
+  const authorization = `AWS4-HMAC-SHA256 Credential=${accessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  return {
+    url,
+    headers: {
+      'Host': host,
+      'x-amz-date': amzDate,
+      'x-amz-content-sha256': payloadHash,
+      'Authorization': authorization,
+      'Content-Type': 'application/json',
+    },
+  };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let courseId: string | undefined;
+  
   try {
     if (req.method !== "POST") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
@@ -33,16 +127,16 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json() as PublishRequest;
-    const { course_id } = body;
+    courseId = body.course_id;
 
-    if (!course_id) {
+    if (!courseId) {
       return new Response(JSON.stringify({ error: "course_id required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    console.log(`Publishing course ${course_id} to S3...`);
+    console.log(`Publishing course ${courseId} to S3...`);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -50,13 +144,13 @@ Deno.serve(async (req: Request) => {
     await supabase.from("courses").update({ 
       s3_sync_status: "syncing",
       s3_error_message: null 
-    }).eq("id", course_id);
+    }).eq("id", courseId);
 
     // Fetch complete course data
     const { data: course, error: courseError } = await supabase
       .from("courses")
       .select("*")
-      .eq("id", course_id)
+      .eq("id", courseId)
       .single();
 
     if (courseError || !course) {
@@ -67,7 +161,7 @@ Deno.serve(async (req: Request) => {
     const { data: modules, error: modulesError } = await (supabase as any)
       .from("modules")
       .select("*")
-      .eq("course_id", course_id)
+      .eq("course_id", courseId)
       .order("position", { ascending: true });
 
     if (modulesError) throw modulesError;
@@ -149,26 +243,23 @@ Deno.serve(async (req: Request) => {
       published_at: new Date().toISOString(),
     };
 
-    // Upload manifest to S3 using aws4fetch (edge-compatible)
-    const aws = new AwsClient({
-      accessKeyId: ACCESS_KEY,
-      secretAccessKey: SECRET_KEY,
-      region: REGION,
-      service: 's3',
-    });
-
-    const manifestKey = `courses/${course_id}/manifest.json`;
+    // Upload to S3 using manual signature
+    const manifestKey = `courses/${courseId}/manifest.json`;
     const manifestBody = JSON.stringify(manifest, null, 2);
     
-    const s3Url = ENDPOINT_URL 
-      ? `${ENDPOINT_URL}/${BUCKET}/${manifestKey}`
-      : `https://${BUCKET}.s3.${REGION}.amazonaws.com/${manifestKey}`;
+    const { url, headers } = await signS3PutRequest(
+      BUCKET,
+      manifestKey,
+      manifestBody,
+      REGION,
+      ACCESS_KEY,
+      SECRET_KEY,
+      ENDPOINT_URL
+    );
 
-    const s3Response = await aws.fetch(s3Url, {
+    const s3Response = await fetch(url, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: manifestBody,
     });
 
@@ -189,13 +280,13 @@ Deno.serve(async (req: Request) => {
       s3_published_at: new Date().toISOString(),
       s3_manifest_url: manifestUrl,
       s3_error_message: null,
-    }).eq("id", course_id);
+    }).eq("id", courseId);
 
     return new Response(
       JSON.stringify({
         success: true,
         manifest_url: manifestUrl,
-        course_id,
+        course_id: courseId,
       }),
       {
         status: 200,
@@ -206,14 +297,13 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("Error publishing course to S3:", error);
     
-    // Update course with error status if we have the course_id
-    const body = await req.json().catch(() => ({}));
-    if (body.course_id) {
+    // Update course with error status
+    if (courseId) {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       await supabase.from("courses").update({
         s3_sync_status: "error",
         s3_error_message: String(error),
-      }).eq("id", body.course_id);
+      }).eq("id", courseId);
     }
 
     return new Response(
