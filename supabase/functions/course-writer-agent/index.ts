@@ -99,6 +99,9 @@ Return a JSON object with this structure:
   ]
 }`;
 
+      // Calculate number of lessons based on 30 minutes per lesson (2 lessons per hour)
+      const numberOfLessons = Math.max(1, Math.round(suggestedModule.estimatedHours * 2));
+      
       const userPrompt = `Generate detailed lessons for this module:
 
 Module: ${suggestedModule.title}
@@ -111,7 +114,7 @@ Course Context:
 - Learning Objectives: ${courseSpec.learningObjectives.join(', ')}
 - Prerequisites: ${courseSpec.prerequisites.join(', ')}
 
-Please generate 3-5 comprehensive lessons that cover this module thoroughly. Each lesson should be substantial and include:
+Please generate EXACTLY ${numberOfLessons} lesson${numberOfLessons > 1 ? 's' : ''} that cover this module thoroughly. Each lesson should be approximately 30 minutes of content and include:
 - Clear explanations
 - Real-world examples
 - Practice exercises
