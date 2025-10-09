@@ -11,8 +11,11 @@ const REGION = Deno.env.get("S3FS_REGION") || "us-east-1";
 const BUCKET = Deno.env.get("S3_BUCKET") || "tangobucket";
 const ACCESS_KEY = Deno.env.get("S3FS_ACCESS_KEY_ID")!;
 const SECRET_KEY = Deno.env.get("S3FS_SECRET_ACCESS_KEY")!;
-const ENDPOINT_URL = Deno.env.get("S3FS_ENDPOINT_URL");
 const S3_PUBLIC_BASE = Deno.env.get("S3_PUBLIC_BASE");
+
+// Only use endpoint if it's NOT an AWS console URL (for S3-compatible services like DigitalOcean Spaces)
+const rawEndpoint = Deno.env.get("S3FS_ENDPOINT_URL");
+const ENDPOINT_URL = rawEndpoint?.includes('console.aws.amazon.com') ? undefined : rawEndpoint;
 
 interface PublishRequest {
   course_id: string;
