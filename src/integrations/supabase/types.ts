@@ -100,6 +100,10 @@ export type Database = {
           description: string | null
           id: string
           length_hours: number
+          s3_error_message: string | null
+          s3_manifest_url: string | null
+          s3_published_at: string | null
+          s3_sync_status: string | null
           status: string
           target_knowledge_level: string
           title: string
@@ -111,6 +115,10 @@ export type Database = {
           description?: string | null
           id?: string
           length_hours: number
+          s3_error_message?: string | null
+          s3_manifest_url?: string | null
+          s3_published_at?: string | null
+          s3_sync_status?: string | null
           status?: string
           target_knowledge_level: string
           title: string
@@ -122,6 +130,10 @@ export type Database = {
           description?: string | null
           id?: string
           length_hours?: number
+          s3_error_message?: string | null
+          s3_manifest_url?: string | null
+          s3_published_at?: string | null
+          s3_sync_status?: string | null
           status?: string
           target_knowledge_level?: string
           title?: string
@@ -129,32 +141,254 @@ export type Database = {
         }
         Relationships: []
       }
+      dummy_heygen_jobs: {
+        Row: {
+          created_at: string
+          payload: Json
+          status: string
+          updated_at: string
+          video_id: string
+          video_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          payload: Json
+          status?: string
+          updated_at?: string
+          video_id: string
+          video_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          payload?: Json
+          status?: string
+          updated_at?: string
+          video_id?: string
+          video_url?: string | null
+        }
+        Relationships: []
+      }
+      lesson_attachments: {
+        Row: {
+          alt_text: string | null
+          asset_type: string
+          created_at: string | null
+          created_by: string | null
+          file_size: number | null
+          filename: string | null
+          id: string
+          lesson_id: string
+          metadata: Json | null
+          mime_type: string | null
+          public_url: string | null
+          storage_bucket: string | null
+          storage_path: string | null
+          storage_provider: string | null
+          uploaded_at: string | null
+        }
+        Insert: {
+          alt_text?: string | null
+          asset_type: string
+          created_at?: string | null
+          created_by?: string | null
+          file_size?: number | null
+          filename?: string | null
+          id?: string
+          lesson_id: string
+          metadata?: Json | null
+          mime_type?: string | null
+          public_url?: string | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          storage_provider?: string | null
+          uploaded_at?: string | null
+        }
+        Update: {
+          alt_text?: string | null
+          asset_type?: string
+          created_at?: string | null
+          created_by?: string | null
+          file_size?: number | null
+          filename?: string | null
+          id?: string
+          lesson_id?: string
+          metadata?: Json | null
+          mime_type?: string | null
+          public_url?: string | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          storage_provider?: string | null
+          uploaded_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lesson_attachments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "lesson_attachments_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lesson_videos: {
+        Row: {
+          avatar_id: string | null
+          check_attempts: number
+          created_at: string
+          file_size: number | null
+          generation_meta: Json | null
+          id: string
+          last_checked_at: string | null
+          lesson_id: string
+          mime_type: string | null
+          next_check_at: string | null
+          public_url: string | null
+          storage_bucket: string | null
+          storage_path: string | null
+          storage_provider: string | null
+          target_duration_s: number | null
+          uploaded_at: string | null
+          video_duration_s: number | null
+          video_id: string | null
+          video_provider: string
+          video_script: string
+          video_status: string | null
+          video_url: string | null
+          voice_id: string | null
+        }
+        Insert: {
+          avatar_id?: string | null
+          check_attempts?: number
+          created_at?: string
+          file_size?: number | null
+          generation_meta?: Json | null
+          id?: string
+          last_checked_at?: string | null
+          lesson_id: string
+          mime_type?: string | null
+          next_check_at?: string | null
+          public_url?: string | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          storage_provider?: string | null
+          target_duration_s?: number | null
+          uploaded_at?: string | null
+          video_duration_s?: number | null
+          video_id?: string | null
+          video_provider?: string
+          video_script: string
+          video_status?: string | null
+          video_url?: string | null
+          voice_id?: string | null
+        }
+        Update: {
+          avatar_id?: string | null
+          check_attempts?: number
+          created_at?: string
+          file_size?: number | null
+          generation_meta?: Json | null
+          id?: string
+          last_checked_at?: string | null
+          lesson_id?: string
+          mime_type?: string | null
+          next_check_at?: string | null
+          public_url?: string | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          storage_provider?: string | null
+          target_duration_s?: number | null
+          uploaded_at?: string | null
+          video_duration_s?: number | null
+          video_id?: string | null
+          video_provider?: string
+          video_script?: string
+          video_status?: string | null
+          video_url?: string | null
+          voice_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lesson_videos_lesson_id_fkey"
+            columns: ["lesson_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lessons: {
         Row: {
+          avatar_id: string | null
           content: string | null
           created_at: string
+          current_video_ref: string | null
+          generation_meta: Json | null
           id: string
+          last_generated_at: string | null
           module_id: string
           position: number
           title: string
+          video_duration_sec: number | null
+          video_id: string | null
+          video_provider: string | null
+          video_script: string | null
+          video_status: string | null
+          video_url: string | null
+          voice_id: string | null
         }
         Insert: {
+          avatar_id?: string | null
           content?: string | null
           created_at?: string
+          current_video_ref?: string | null
+          generation_meta?: Json | null
           id?: string
+          last_generated_at?: string | null
           module_id: string
           position?: number
           title: string
+          video_duration_sec?: number | null
+          video_id?: string | null
+          video_provider?: string | null
+          video_script?: string | null
+          video_status?: string | null
+          video_url?: string | null
+          voice_id?: string | null
         }
         Update: {
+          avatar_id?: string | null
           content?: string | null
           created_at?: string
+          current_video_ref?: string | null
+          generation_meta?: Json | null
           id?: string
+          last_generated_at?: string | null
           module_id?: string
           position?: number
           title?: string
+          video_duration_sec?: number | null
+          video_id?: string | null
+          video_provider?: string | null
+          video_script?: string | null
+          video_status?: string | null
+          video_url?: string | null
+          voice_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "lessons_current_video_ref_fkey"
+            columns: ["current_video_ref"]
+            isOneToOne: false
+            referencedRelation: "lesson_videos"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "lessons_module_id_fkey"
             columns: ["module_id"]
