@@ -611,21 +611,7 @@ function InlineVideoPlayer({ url, title = "Lesson Video", captionsVttUrl }: Vide
                   <Image className="w-4 h-4 mr-2" />
                   {populateImages.isPending ? "Populating Images..." : "Populate Images"}
                 </Button>
-                <Button
-                  onClick={() => refreshCourseVideos.mutate()}
-                  disabled={refreshCourseVideos.isPending}
-                  variant="outline"
-                >
-                  {refreshCourseVideos.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Checking Videos…
-                    </>
-                  ) : (
-                    "Check Video Status"
-                  )}
-                </Button>
-                 <Button variant="outline" onClick={() => purgeDryRun.mutate()}>
+                <Button variant="outline" onClick={() => purgeDryRun.mutate()}>
                   Purge Dry-Run
                 </Button>
 
