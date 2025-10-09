@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { S3Client, PutObjectCommand } from "npm:@aws-sdk/client-s3@3.336.0";
-import { getSignedUrl } from "npm:@aws-sdk/s3-request-presigner@3.336.0";
+import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.515.0";
+import { getSignedUrl } from "https://esm.sh/@aws-sdk/s3-request-presigner@3.515.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

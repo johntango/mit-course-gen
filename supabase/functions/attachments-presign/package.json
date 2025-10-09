@@ -1,9 +1,5 @@
 {
   "name": "attachments-presign",
   "version": "0.1.0",
-  "type": "module", 
-  "dependencies": {
-    "npm:@aws-sdk/client-s3": "3.336.0",
-    "npm:@aws-sdk/s3-request-presigner": "3.336.0"
-  }
+  "type": "module"
 }

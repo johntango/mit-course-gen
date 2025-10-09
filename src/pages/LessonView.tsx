@@ -82,7 +82,7 @@ const LessonView = () => {
     enabled: !!lessonId,
     refetchInterval: 4000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("lesson_videos")
         .select("id, lesson_id, video_status, video_url, created_at")
         .eq("lesson_id", lessonId)
@@ -91,7 +91,7 @@ const LessonView = () => {
         .limit(1)
         .maybeSingle();
       if (error) throw error;
-      return data as { id: string; video_url: string } | null;
+      return data;
     },
   });
 
@@ -101,7 +101,7 @@ const LessonView = () => {
     enabled: !!lessonId,
     refetchInterval: 4000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("lesson_videos")
         .select(
           "id, lesson_id, video_status, video_id, created_at, target_duration_s"
@@ -112,9 +112,7 @@ const LessonView = () => {
         .limit(1)
         .maybeSingle();
       if (error) throw error;
-      return data as
-        | { id: string; video_id?: string | null; video_status: string; target_duration_s?: number | null }
-        | null;
+      return data;
     },
   });
 

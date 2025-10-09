@@ -121,7 +121,7 @@ const CourseManagement = () => {
     enabled: !!courseId && lessonIds.length > 0,
     refetchInterval: 4000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("lesson_videos")
         .select("id, lesson_id, video_status, video_url, created_at")
         .in("lesson_id", lessonIds)
@@ -149,7 +149,7 @@ const CourseManagement = () => {
     enabled: !!courseId && lessonIds.length > 0,
     refetchInterval: 4000,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("lesson_videos")
         .select("id, lesson_id, video_status, video_id, created_at, target_duration_s")
         .in("lesson_id", lessonIds)
