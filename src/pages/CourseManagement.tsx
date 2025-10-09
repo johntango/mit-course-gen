@@ -744,9 +744,9 @@ function InlineVideoPlayer({ url, title = "Lesson Video", captionsVttUrl }: Vide
 
                   {/* VIDEO TOOLS */}
                   <div className="rounded-md border border-border/60 p-3 mb-3">
-                    <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-                      <div className="w-full md:max-w-xs">
-                        <Label htmlFor={`minutes-${lesson.id}`}>Target length (minutes)</Label>
+                    <div className="flex flex-wrap items-end gap-3">
+                      <div className="flex flex-col gap-1">
+                        <Label htmlFor={`minutes-${lesson.id}`} className="text-xs">Target length (min)</Label>
                         <Input
                           id={`minutes-${lesson.id}`}
                           type="number"
@@ -755,13 +755,11 @@ function InlineVideoPlayer({ url, title = "Lesson Video", captionsVttUrl }: Vide
                           value={minutesStr}
                           onChange={(e) => setMinutesForLesson(lesson.id, e.target.value)}
                           placeholder={DEFAULT_MINUTES}
+                          className="w-24"
                         />
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Decimals allowed, e.g., <code>1.5</code> for ~90 seconds.
-                        </p>
                       </div>
 
-                      <div className="flex flex-wrap gap-2">
+                      
                         <Button
                           size="sm"
                           variant="outline"
@@ -824,7 +822,6 @@ function InlineVideoPlayer({ url, title = "Lesson Video", captionsVttUrl }: Vide
                             "Check Status"
                           )}
                         </Button>
-                      </div>
                     </div>
 
                     {/* Optional: script preview */}
