@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
-import { S3Client, PutObjectCommand } from "https://esm.sh/@aws-sdk/client-s3@3.515.0";
+import { AwsClient } from "https://esm.sh/aws4fetch@1.0.18";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -149,32 +149,33 @@ Deno.serve(async (req: Request) => {
       published_at: new Date().toISOString(),
     };
 
-    // Configure S3 client
-    const s3Config: any = {
+    // Upload manifest to S3 using aws4fetch (edge-compatible)
+    const aws = new AwsClient({
+      accessKeyId: ACCESS_KEY,
+      secretAccessKey: SECRET_KEY,
       region: REGION,
-      credentials: {
-        accessKeyId: ACCESS_KEY,
-        secretAccessKey: SECRET_KEY,
-      },
-    };
-
-    if (ENDPOINT_URL) {
-      s3Config.endpoint = ENDPOINT_URL;
-      s3Config.forcePathStyle = true;
-    }
-
-    const s3Client = new S3Client(s3Config);
-
-    // Upload manifest to S3
-    const manifestKey = `courses/${course_id}/manifest.json`;
-    const manifestCommand = new PutObjectCommand({
-      Bucket: BUCKET,
-      Key: manifestKey,
-      Body: JSON.stringify(manifest, null, 2),
-      ContentType: "application/json",
+      service: 's3',
     });
 
-    await s3Client.send(manifestCommand);
+    const manifestKey = `courses/${course_id}/manifest.json`;
+    const manifestBody = JSON.stringify(manifest, null, 2);
+    
+    const s3Url = ENDPOINT_URL 
+      ? `${ENDPOINT_URL}/${BUCKET}/${manifestKey}`
+      : `https://${BUCKET}.s3.${REGION}.amazonaws.com/${manifestKey}`;
+
+    const s3Response = await aws.fetch(s3Url, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: manifestBody,
+    });
+
+    if (!s3Response.ok) {
+      const errorText = await s3Response.text();
+      throw new Error(`S3 upload failed (${s3Response.status}): ${errorText}`);
+    }
 
     const manifestUrl = S3_PUBLIC_BASE 
       ? `${S3_PUBLIC_BASE}/${manifestKey}`
