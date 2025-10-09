@@ -63,6 +63,9 @@ Given user input, create a normalized schema with:
 4. Prerequisites and difficulty assessment
 5. Target audience analysis
 
+CRITICAL: The totalHours represents the ENTIRE course duration. The sum of all module estimatedHours MUST equal totalHours.
+Distribute the total time across modules appropriately - each module gets a portion of the total, not the full duration.
+
 Return a JSON object with this exact structure:
 {
   "courseSpec": {
