@@ -520,6 +520,33 @@ function InlineVideoPlayer({ url, title = "Lesson Video", captionsVttUrl }: Vide
       toast({ title: "Purge failed", description: String(e?.message ?? e), variant: "destructive" });
     },
   });
+
+  // Publish course to S3
+  const publishToS3 = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("publish-course-to-s3", {
+        body: { course_id: courseId },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Course Published",
+        description: `Course successfully published to S3: ${data.manifest_url}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["course", courseId] });
+    },
+    onError: async (error: any) => {
+      const msg = await explainEdgeError(error);
+      toast({
+        title: "Publish Failed",
+        description: msg,
+        variant: "destructive",
+      });
+    },
+  });
+
   const displayVideoId = (vid?: string | null) => (vid && /^dryRun(_|$)/.test(vid) ? "dryRun" : vid || "—");
 
   if (courseLoading || modulesLoading) {
@@ -562,6 +589,24 @@ function InlineVideoPlayer({ url, title = "Lesson Video", captionsVttUrl }: Vide
           <div className="flex gap-2">
             {course.status === "completed" && (
               <>
+                <Button 
+                  onClick={() => publishToS3.mutate()} 
+                  disabled={publishToS3.isPending || course.s3_sync_status === 'syncing'}
+                  variant="default"
+                >
+                  {publishToS3.isPending || course.s3_sync_status === 'syncing' ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Publishing to S3...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4 mr-2" />
+                      Publish to S3
+                      {course.s3_sync_status === 'synced' && ' ✓'}
+                    </>
+                  )}
+                </Button>
                 <Button onClick={() => populateImages.mutate()} disabled={populateImages.isPending} variant="outline">
                   <Image className="w-4 h-4 mr-2" />
                   {populateImages.isPending ? "Populating Images..." : "Populate Images"}
