@@ -33,13 +33,24 @@ async function signS3PutRequest(
   const dateStamp = now.toISOString().slice(0, 10).replace(/-/g, '');
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, '');
   
-  const host = endpoint 
-    ? new URL(endpoint).host
-    : `${bucket}.s3.${region}.amazonaws.com`;
+  // For standard S3, use virtual-hosted-style URLs (bucket.s3.region.amazonaws.com)
+  // For custom endpoints (like DigitalOcean Spaces), use path-style
+  let host: string;
+  let url: string;
+  let canonicalUri: string;
   
-  const url = endpoint
-    ? `${endpoint}/${bucket}/${key}`
-    : `https://${host}/${key}`;
+  if (endpoint) {
+    // Custom endpoint - use path style (endpoint/bucket/key)
+    const endpointUrl = new URL(endpoint);
+    host = endpointUrl.host;
+    url = `${endpoint}/${bucket}/${key}`;
+    canonicalUri = `/${bucket}/${key}`;
+  } else {
+    // Standard AWS S3 - use virtual-hosted style (bucket.s3.region.amazonaws.com/key)
+    host = `${bucket}.s3.${region}.amazonaws.com`;
+    url = `https://${host}/${key}`;
+    canonicalUri = `/${key}`;
+  }
 
   // Hash the payload
   const payloadHash = Array.from(
@@ -51,7 +62,7 @@ async function signS3PutRequest(
   const signedHeaders = 'host;x-amz-content-sha256;x-amz-date';
   const canonicalRequest = [
     'PUT',
-    `/${key}`,
+    canonicalUri,
     '',
     canonicalHeaders,
     signedHeaders,
@@ -247,6 +258,8 @@ Deno.serve(async (req: Request) => {
     const manifestKey = `courses/${courseId}/manifest.json`;
     const manifestBody = JSON.stringify(manifest, null, 2);
     
+    console.log(`Uploading to S3 - Bucket: ${BUCKET}, Region: ${REGION}, Endpoint: ${ENDPOINT_URL || 'default'}, Key: ${manifestKey}`);
+    
     const { url, headers } = await signS3PutRequest(
       BUCKET,
       manifestKey,
@@ -257,6 +270,8 @@ Deno.serve(async (req: Request) => {
       ENDPOINT_URL
     );
 
+    console.log(`S3 PUT URL: ${url}`);
+
     const s3Response = await fetch(url, {
       method: 'PUT',
       headers,
@@ -265,6 +280,7 @@ Deno.serve(async (req: Request) => {
 
     if (!s3Response.ok) {
       const errorText = await s3Response.text();
+      console.error(`S3 upload failed - Status: ${s3Response.status}, Response: ${errorText.substring(0, 500)}`);
       throw new Error(`S3 upload failed (${s3Response.status}): ${errorText}`);
     }
 
